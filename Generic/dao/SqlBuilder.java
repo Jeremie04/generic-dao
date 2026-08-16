@@ -199,20 +199,21 @@ final class SqlBuilder {
     static String prepareUpdateSQL(GenericDAO self, Class<?> clazz, Field[] fields, Field primaryKey)
             throws Exception {
         String tableName = FieldReflection.getTableName(self, clazz);
-        String sql = "UPDATE " + tableName + " SET ";
-        for (int i = 0; i < fields.length; i++) {
-            if (!FieldReflection.isPrimaryKey(fields[i])) {
-                String fieldName = FieldReflection.getFieldName(fields[i]);
-                if (FieldReflection.isObject(fields[i])) {
-                    fieldName = FieldReflection.getFieldNameIfObject(self, fields[i], fieldName, self);
+        // StringJoiner ne place une virgule qu'entre deux champs reellement ajoutes : contrairement
+        // a une virgule basee sur l'index dans le tableau, ça reste correct meme si le champ ignore
+        // (la cle primaire) se trouve en derniere position du tableau.
+        StringJoiner setClause = new StringJoiner(", ");
+        for (Field field : fields) {
+            if (!FieldReflection.isPrimaryKey(field)) {
+                String fieldName = FieldReflection.getFieldName(field);
+                if (FieldReflection.isObject(field)) {
+                    fieldName = FieldReflection.getFieldNameIfObject(self, field, fieldName, self);
                 }
-                sql = sql + fieldName + " =  ?";
-                if (i < fields.length - 1) {
-                    sql = sql + ", ";
-                }
+                setClause.add(fieldName + " = ?");
             }
         }
-        sql = sql + " WHERE " + FieldReflection.getFieldName(primaryKey) + " = ?";
+        String sql = "UPDATE " + tableName + " SET " + setClause
+                + " WHERE " + FieldReflection.getFieldName(primaryKey) + " = ?";
 
         LOG.fine(sql);
         return sql;

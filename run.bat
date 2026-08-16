@@ -9,6 +9,9 @@ rem === Decommentez la ligne suivante pour le voir a nouveau (voir logging.prope
 rem set LOG_OPTS=-Djava.util.logging.config.file=logging.properties
 set LOG_OPTS=
 
+rem === Chemin vers le jar JUnit 5 autonome (console-standalone), a adapter - voir README ===
+set JUNIT_JAR=D:\classpath\junit-platform-console-standalone-1.14.3.jar
+
 echo === Compilation ===
 
 javac -d . Generic\annotation\AClass.java
@@ -71,8 +74,26 @@ if errorlevel 1 goto :error
 javac -d . test\TestPerformanceAvance.java
 if errorlevel 1 goto :error
 
+javac -d . -cp .;%JUNIT_JAR% test\GenericDAOCrudTest.java
+if errorlevel 1 goto :error
+
+javac -d . -cp .;%JUNIT_JAR% test\GenericDAORelationTest.java
+if errorlevel 1 goto :error
+
+javac -d . -cp .;%JUNIT_JAR% test\GenericDAOInheritanceTest.java
+if errorlevel 1 goto :error
+
+javac -d . -cp .;%JUNIT_JAR% test\GenericDAOFieldHandlingTest.java
+if errorlevel 1 goto :error
+
 echo.
 echo === Compilation reussie ===
+
+echo.
+echo === Tests JUnit (assertions automatiques) ===
+java %LOG_OPTS% -jar %JUNIT_JAR% execute --class-path .;%POSTGRES_JAR% --select-package test --details tree
+rem Si cette syntaxe echoue (varie selon la version du jar telechargee), essayez :
+rem java -jar %JUNIT_JAR% --help
 
 echo.
 echo === Execution des tests de base (test.Test) ===

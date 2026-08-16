@@ -47,7 +47,9 @@ test/
   TestAvance.java — teste les relations et l'héritage
   TestPerformance.java — mesure le temps d'exécution de save/select sur un volume de données important
   PerfEntityLarge.java, TestPerformanceAvance.java — mêmes mesures avec une entité à 17 attributs et avec une relation (Materiel/Categorie)
-run.bat           — compile tout le projet puis lance les quatre programmes de test ci-dessus
+  GenericDAOCrudTest.java, GenericDAORelationTest.java,
+  GenericDAOInheritanceTest.java, GenericDAOFieldHandlingTest.java — mêmes scénarios que ci-dessus, en tests JUnit 5 avec assertions (voir "Tests JUnit" plus bas)
+run.bat           — compile tout le projet puis lance les tests JUnit et les programmes de démonstration ci-dessus
 ```
 
 ## Démarrage rapide
@@ -232,6 +234,22 @@ Puis :
 ```bash
 run.bat
 ```
+
+## Tests JUnit
+
+`test/Test.java`, `TestAvance.java`, `TestPerformance*.java` sont des démonstrations qui affichent leur résultat pour relecture manuelle. `GenericDAOCrudTest`, `GenericDAORelationTest`, `GenericDAOInheritanceTest` et `GenericDAOFieldHandlingTest` couvrent les mêmes scénarios avec de vraies assertions JUnit 5 — y compris des tests de non-régression pour chaque bug corrigé au fil de ce projet (`selectOne()`, la pagination, les champs hérités, les champs `static`, les booléens par défaut, ...).
+
+Ils tournent contre votre base PostgreSQL locale (pas de Testcontainers/Docker), via un unique jar autonome — pas besoin de Maven/Gradle :
+
+1. Téléchargez `junit-platform-console-standalone` (dernière version) depuis [Maven Central](https://mvnrepository.com/artifact/org.junit.platform/junit-platform-console-standalone), et placez le chemin dans `run.bat` :
+   ```bat
+   set JUNIT_JAR=D:\classpath\junit-platform-console-standalone-1.10.2.jar
+   ```
+2. `run.bat` compile les 4 classes de test et lance :
+   ```bat
+   java -jar %JUNIT_JAR% execute --class-path .;%POSTGRES_JAR% --select-package test --details tree
+   ```
+   La syntaxe exacte des options peut varier selon la version du jar téléchargée ; en cas d'échec, `java -jar %JUNIT_JAR% --help` liste les options disponibles pour votre version.
 
 ## Journalisation
 
