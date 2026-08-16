@@ -42,11 +42,31 @@ if errorlevel 1 goto :error
 javac -d . test\Test.java
 if errorlevel 1 goto :error
 
+javac -d . test\Categorie.java
+if errorlevel 1 goto :error
+
+javac -d . test\Personne.java
+if errorlevel 1 goto :error
+
+javac -d . test\Materiel.java
+if errorlevel 1 goto :error
+
+javac -d . test\Employe.java
+if errorlevel 1 goto :error
+
+javac -d . test\TestAvance.java
+if errorlevel 1 goto :error
+
 echo.
 echo === Compilation reussie ===
+
 echo.
-echo === Execution des tests (test.Test) ===
+echo === Execution des tests de base (test.Test) ===
 java -cp .;%POSTGRES_JAR% test.Test
+
+echo.
+echo === Execution des tests avances (test.TestAvance) ===
+java -cp .;%POSTGRES_JAR% test.TestAvance
 
 echo.
 pause

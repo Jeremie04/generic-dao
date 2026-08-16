@@ -435,11 +435,11 @@ public class GenericDAO {
      * SELECT
      */
     private String prepareAcondition(Field field) throws Exception {
+        // Un champ herite d'une classe parente designe toujours une colonne de la meme table :
+        // pas de suffixe de nom de classe ici (contrairement a prepareResearchCondition, qui
+        // gere le cas distinct d'un objet lie dans une autre table).
         String fieldName = getFieldName(field);
         String equal = " = ? ";
-        if (field.getDeclaringClass() != this.getClass()) {
-            fieldName = fieldName + field.getDeclaringClass().getSimpleName();
-        }
         if (isObject(field)) {
             fieldName = getFieldNameIfObject(field, fieldName, this);
         }
@@ -639,7 +639,10 @@ public class GenericDAO {
                 String columnName = getFieldName(field);
                 Object value = getValueFromResultSet(resultSet, columnName, motherFieldName);
 
-                if (value != null && field.getDeclaringClass() == clazz) {
+                // Un champ herite d'une classe parente (Employe extends Personne, par ex.)
+                // appartient bien a cette ligne : ne pas exiger declaringClass == clazz, sinon
+                // les champs herites (dont potentiellement la cle primaire) restent toujours null.
+                if (value != null) {
                     field.set(instance, convertValue(value, field.getType()));
                     fieldIterator.remove();
                 }
