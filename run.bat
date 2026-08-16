@@ -57,6 +57,15 @@ if errorlevel 1 goto :error
 javac -d . test\TestAvance.java
 if errorlevel 1 goto :error
 
+javac -d . test\TestPerformance.java
+if errorlevel 1 goto :error
+
+javac -d . test\PerfEntityLarge.java
+if errorlevel 1 goto :error
+
+javac -d . test\TestPerformanceAvance.java
+if errorlevel 1 goto :error
+
 echo.
 echo === Compilation reussie ===
 
@@ -67,6 +76,14 @@ java -cp .;%POSTGRES_JAR% test.Test
 echo.
 echo === Execution des tests avances (test.TestAvance) ===
 java -cp .;%POSTGRES_JAR% test.TestAvance
+
+echo.
+echo === Mesure de performance (test.TestPerformance) ===
+java -cp .;%POSTGRES_JAR% test.TestPerformance
+
+echo.
+echo === Mesure de performance avancee (test.TestPerformanceAvance) ===
+java -cp .;%POSTGRES_JAR% test.TestPerformanceAvance
 
 echo.
 pause

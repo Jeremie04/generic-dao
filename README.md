@@ -45,7 +45,9 @@ test/
   Categorie.java, Materiel.java  — exemple de relation "a un" (objet imbriqué)
   Personne.java, Employe.java    — exemple d'héritage (champs partagés via extends)
   TestAvance.java — teste les relations et l'héritage
-run.bat           — compile tout le projet puis lance test.Test et test.TestAvance
+  TestPerformance.java — mesure le temps d'exécution de save/select sur un volume de données important
+  PerfEntityLarge.java, TestPerformanceAvance.java — mêmes mesures avec une entité à 17 attributs et avec une relation (Materiel/Categorie)
+run.bat           — compile tout le projet puis lance les quatre programmes de test ci-dessus
 ```
 
 ## Démarrage rapide
@@ -116,6 +118,8 @@ MyEntity e3 = new MyEntity();
 e3.setNom("Troisieme");
 new MyEntity().save(con, new MyEntity[] { e2, e3 }, false, true);
 ```
+
+⚠️ La table (et plus généralement toute config `set...` de l'entité) utilisée pour l'insertion vient de l'objet sur lequel `save(...)` est **appelé**, pas des objets du tableau. Si vous utilisez `setTableName(...)` pour cibler une table différente de celle par défaut, appliquez-le sur l'instance qui appelle `save(...)`, pas seulement sur celles du lot.
 
 À la différence de `save()` sur un seul objet, cette variante ne renvoie pas les id générés (elle retourne `void`).
 
@@ -211,7 +215,9 @@ Materiel[] complets = m.select(con, false); // categorie.nom rempli, sans SQL pe
 
 `run.bat` compile chaque fichier avec `javac -d .`, puis lance :
 - `test.Test` : crée une table de test et exerce chaque fonction de base (save unitaire et en lot, select, selectOne, findById, update, recherche, pagination, getTableSize, delete) ;
-- `test.TestAvance` : même principe pour la relation objet imbriqué (`Materiel`/`Categorie`) et l'héritage (`Employe extends Personne`).
+- `test.TestAvance` : même principe pour la relation objet imbriqué (`Materiel`/`Categorie`) et l'héritage (`Employe extends Personne`) ;
+- `test.TestPerformance` : insère 2000 lignes (constante `NB_LIGNES` modifiable) puis chronomètre `save()` unitaire vs en lot, `select()` sur la table complète, `select()` paginé et `findById()`, avec le temps moyen par ligne ;
+- `test.TestPerformanceAvance` : mêmes mesures que `TestPerformance`, mais sur une entité à 17 attributs (`PerfEntityLarge`, sans relation) puis sur une entité avec relation (`Materiel`/`Categorie`, avec et sans `JOIN`) — pour voir si/de combien le nombre d'attributs et les objets imbriqués alourdissent le coût de la réflexion par rapport à l'entité simple.
 
 Chaque test nettoie ses propres tables à la fin.
 
@@ -232,3 +238,5 @@ run.bat
 - Les identifiants de connexion dans `Connexion.java` sont en dur dans le code (à externaliser avant tout usage partagé/public).
 - `Generic/dao/legacy/GenericDAO2.java` est une ancienne implémentation conservée pour référence uniquement ; elle n'est plus maintenue et ne doit pas être utilisée.
 - Pas de gestion de pool de connexions : chaque appel ouvre/utilise une `Connection` JDBC classique.
+- Un champ `int`/`double` à `0`, ou `boolean` à `false` (les valeurs par défaut de Java), est considéré comme "non renseigné" par `save`/`select`/`update` (voir `init()`) : impossible d'écrire explicitement ces valeurs par défaut, ou de filtrer un `select()` "par l'exemple" dessus. Pour une valeur `0`/`false` volontaire, passez par `setOtherConditions(...)` ou une requête SQL personnalisée.
+- Les champs `static` d'une entité (constantes, etc.) sont ignorés par la réflexion — seuls les champs d'instance sont mappés sur des colonnes.

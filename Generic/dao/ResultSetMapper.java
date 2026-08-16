@@ -20,17 +20,17 @@ final class ResultSetMapper {
             throws Exception {
         int columnIdx = -1;
         if (motherFieldName != null) {
-            System.out.println("try " + columnName + "_" + motherFieldName);
+            // System.out.println("try " + columnName + "_" + motherFieldName);
             try {
                 columnIdx = resultSet.findColumn(columnName + "_" + motherFieldName);
             } catch (Exception ex) {
-                System.out.println(columnName + "_" + motherFieldName + " not found so go to next one");
+                // System.out.println(columnName + "_" + motherFieldName + " not found so go to next one");
             }
         } else {
             try {
                 columnIdx = resultSet.findColumn(columnName);
             } catch (Exception e) {
-                System.out.println(columnName + " not found so go to next one");
+                // System.out.println(columnName + " not found so go to next one");
             }
         }
         if (columnIdx != -1) {
@@ -91,15 +91,14 @@ final class ResultSetMapper {
             }
             if (FieldReflection.isObject(field)) {
                 String childFieldName = sqlFieldName.split("_", 2)[0]; // partie avant le premier "_"
-                System.out.println("child field name " + childFieldName);
+                // System.out.println("child field name " + childFieldName);
                 Object valueFromObjetField = field.get(instance); // valeur deja instanciee, le cas echeant
                 if (valueFromObjetField == null) {
                     valueFromObjetField = (T) field.getType().getDeclaredConstructor().newInstance();
                 }
                 Field childField = valueFromObjetField.getClass().getDeclaredField(childFieldName);
                 String nomAttribut = GenericDAO.toCamelCase(sqlFieldName.split("_", 2)[1]); // nom d'attribut suppose
-                System.out.println(
-                        "nom attribut (sql après camelcase) :" + nomAttribut + " nom du field " + field.getName());
+                // System.out.println("nom attribut (sql après camelcase) :" + nomAttribut + " nom du field " + field.getName());
                 if (nomAttribut.equalsIgnoreCase(field.getName())) {
                     childField.setAccessible(true);
                     childField.set(valueFromObjetField, FieldReflection.convertValue(value, childField.getType()));

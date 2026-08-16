@@ -63,7 +63,7 @@ public class GenericDAO {
         Class c = this.getClass();
         Field[] f = c.getDeclaredFields();
         for (int i = 0; i < f.length; i++) {
-            if (f[i].getType().isPrimitive()) {
+            if (f[i].getType().isPrimitive() && !java.lang.reflect.Modifier.isStatic(f[i].getModifiers())) {
                 method = this.getClass().getMethod("set" + f[i].getName().substring(0, 1).toUpperCase()
                         + f[i].getName().toString().substring(1), f[i].getType());
                 if (f[i].getType().toString().contains("int")
@@ -226,6 +226,10 @@ public class GenericDAO {
      * les objets doivent donc avoir les memes champs renseignes.
      * A la difference de {@link #save(Connection, boolean, boolean)}, ne renvoie pas les
      * cles primaires generees.
+     * Attention : la table (et toute config {@code set...}, ex. {@link #setTableName(String)})
+     * utilisee est celle de l'entite sur laquelle {@code save} est appele, pas celle des objets
+     * du tableau — appelez cette methode sur une instance configuree, pas sur un {@code new
+     * MyEntity()} non configure.
      *
      * @param con     connexion a utiliser, ou {@code null} pour en ouvrir une nouvelle
      * @param objects les entites a inserer (non vide)

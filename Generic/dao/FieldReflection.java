@@ -84,6 +84,12 @@ final class FieldReflection {
 
         return fields.stream()
                 .filter(field -> {
+                    // Un champ static (constante, compteur partage, ...) n'est pas une colonne :
+                    // sans ce filtre, "public static final int NB = 3;" serait insere comme si
+                    // c'etait un attribut de chaque ligne.
+                    if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                        return false;
+                    }
                     AField fieldAnnotation = field.getAnnotation(AField.class);
                     String fieldName = getFieldName(field);
                     String className = clazz.getSimpleName();
@@ -117,6 +123,11 @@ final class FieldReflection {
             return !((Double) value).equals((double) self.getInitialValue()) && (double) value != 0;
         } else if (value instanceof String) {
             return !value.toString().isEmpty();
+        } else if (value instanceof Boolean) {
+            // Meme convention que pour les nombres : la valeur par defaut (false) est traitee
+            // comme "non renseignee", sinon un simple "new Entite()" pour un select-all
+            // filtrerait involontairement sur ce champ (WHERE monBooleen = false).
+            return (Boolean) value;
         }
         return true;
     }
