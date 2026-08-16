@@ -2,10 +2,14 @@ package Generic.connexion;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.logging.Logger;
 
 import Generic.exceptions.DatabaseException;
 
 public class Connexion {
+
+    private static final Logger LOG = Logger.getLogger(Connexion.class.getName());
+
     public static String DATABASENAME = "postgres";
     public static String HOST = "localhost";
     public static String DATABASE = "newtestdao";
@@ -20,14 +24,14 @@ public class Connexion {
                 Class.forName("org.postgresql.Driver");
                 con = DriverManager.getConnection("jdbc:postgresql://" + HOST + ":" + PORT + "/" + DATABASE, USERNAME,
                         PASSWORD);
-                System.out.println("[ RC Framework : Postgres Connected ]");
+                LOG.fine("[ RC Framework : Postgres Connected ]");
                 con.setAutoCommit(false);
             } else if (DATABASENAME.equals("oracle")) {
 
                 Class.forName("oracle.jdbc.driver.OracleDriver");
                 con = DriverManager.getConnection("jdbc:oracle:thin:@" + HOST + ":" + PORT + ":orcl", USERNAME,
                         PASSWORD);
-                System.out.println("[ RC Framework : Oracle Connected ]");
+                LOG.fine("[ RC Framework : Oracle Connected ]");
                 con.setAutoCommit(false);
             }
             return con;

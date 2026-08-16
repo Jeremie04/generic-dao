@@ -9,7 +9,9 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 
 import Generic.connexion.Connexion;
 import Generic.exceptions.NotFoundException;
@@ -22,8 +24,17 @@ import Generic.util.ParserAttributs;
  * cours (recherche, filtres, tri, pagination, ...) et orchestre les classes internes du
  * package : FieldReflection (metadonnees), SqlBuilder (construction SQL), StatementBinder
  * (liaison des parametres) et ResultSetMapper (reconstruction d'objets).
+ * <p>
+ * Le SQL genere et les evenements de cycle de vie (commit, fermeture de connexion, ...) sont
+ * journalises au niveau {@code FINE} (desactive par defaut) via {@code java.util.logging} ;
+ * les echecs de rollback/fermeture le sont au niveau {@code WARNING} (visible par defaut).
+ * Pour voir le SQL, activez {@code Generic.dao} a {@code FINE} (ex. via un fichier
+ * {@code logging.properties} passe a la JVM avec {@code -Djava.util.logging.config.file=...}).
  */
 public class GenericDAO {
+
+    private static final Logger LOG = Logger.getLogger(GenericDAO.class.getName());
+
     protected Method method;
     private int initialValue = 2066;
     private String tableName = "";
@@ -59,7 +70,7 @@ public class GenericDAO {
      * construction de l'entite si vous devez pouvoir enregistrer explicitement la valeur 0.
      */
     public void init() throws Exception {
-        System.out.println("Initializing " + this.getClass());
+        LOG.fine(() -> "Initializing " + this.getClass());
         Class c = this.getClass();
         Field[] f = c.getDeclaredFields();
         for (int i = 0; i < f.length; i++) {
@@ -72,7 +83,7 @@ public class GenericDAO {
                         || f[i].getType().toString().contains("long")) {
                     method.invoke(this, initialValue);
                     if (method.getName().equals("setId")) {
-                        System.out.println("initialize id with value " + initialValue + " in object " + this);
+                        LOG.fine(() -> "initialize id with value " + initialValue + " in object " + this);
                     }
                 }
             }
@@ -134,19 +145,19 @@ public class GenericDAO {
         }
 
         try (Statement stat = con.createStatement()) {
-            System.out.println(sql);
+            LOG.fine(sql);
             stat.executeUpdate(sql);
             if (commit) {
                 con.commit();
-                System.out.println("Commited");
+                LOG.fine("Commited");
             }
         } catch (SQLException e) {
             if (commit) {
                 try {
                     con.rollback();
-                    System.out.println("Rollback executed");
+                    LOG.fine("Rollback executed");
                 } catch (SQLException rollbackEx) {
-                    System.err.println("Rollback failed: " + rollbackEx.getMessage());
+                    LOG.warning(() -> "Rollback failed: " + rollbackEx.getMessage());
                 }
             }
             throw new Exception("SQL execution failed: " + e.getMessage(), e);
@@ -154,9 +165,9 @@ public class GenericDAO {
             if (close || isClose) {
                 try {
                     con.close();
-                    System.out.println("Connection closed");
+                    LOG.fine("Connection closed");
                 } catch (SQLException e) {
-                    System.err.println("Failed to close connection: " + e.getMessage());
+                    LOG.warning(() -> "Failed to close connection: " + e.getMessage());
                 }
             }
         }
@@ -202,7 +213,7 @@ public class GenericDAO {
                 }
                 if (commit) {
                     con.commit();
-                    System.out.println("Committed");
+                    LOG.fine("Committed");
                 }
                 return idValue;
             } catch (SQLException e) {
@@ -212,9 +223,9 @@ public class GenericDAO {
             if (closeConnection || isClose) {
                 try {
                     con.close();
-                    System.out.println("Connection closed");
+                    LOG.fine("Connection closed");
                 } catch (SQLException e) {
-                    System.err.println("Failed to close connection: " + e.getMessage());
+                    LOG.warning(() -> "Failed to close connection: " + e.getMessage());
                 }
             }
         }
@@ -262,15 +273,15 @@ public class GenericDAO {
 
                 if (commit) {
                     con.commit();
-                    System.out.println("Committed");
+                    LOG.fine("Committed");
                 }
             } catch (SQLException e) {
                 if (commit) {
                     try {
                         con.rollback();
-                        System.out.println("Rollback executed");
+                        LOG.fine("Rollback executed");
                     } catch (SQLException rollbackEx) {
-                        System.err.println("Rollback failed: " + rollbackEx.getMessage());
+                        LOG.warning(() -> "Rollback failed: " + rollbackEx.getMessage());
                     }
                 }
                 throw new Exception("SQL execution failed: " + e.getMessage(), e);
@@ -279,9 +290,9 @@ public class GenericDAO {
             if (closeConnection || isClose) {
                 try {
                     con.close();
-                    System.out.println("Connection closed");
+                    LOG.fine("Connection closed");
                 } catch (SQLException e) {
-                    System.err.println("Failed to close connection: " + e.getMessage());
+                    LOG.warning(() -> "Failed to close connection: " + e.getMessage());
                 }
             }
         }
@@ -348,14 +359,16 @@ public class GenericDAO {
         try {
             Field[] allfields = FieldReflection.getFieldsNotIgnored(this, clazz);
             Field[] notNullFields = FieldReflection.getFieldsNotNull(this, this, allfields);
-            System.out.println(sql);
+            LOG.fine(sql);
             statement = con.prepareStatement(sql);
             statement = StatementBinder.prepareStatement(this, statement, notNullFields, this);
             resultSet = statement.executeQuery();
+            Map<String, Integer> columnIndex = ResultSetMapper.buildColumnIndex(resultSet);
             while (resultSet.next()) {
                 List<Field> fieldsList = new ArrayList<>(Arrays.asList(allfields));
                 Iterator<Field> FieldIterator = fieldsList.iterator();
-                T instance = ResultSetMapper.setRowFromResultSet(this, clazz, resultSet, FieldIterator, null);
+                T instance = ResultSetMapper.setRowFromResultSet(this, clazz, resultSet, columnIndex, FieldIterator,
+                        null);
                 resultList.add(instance);
             }
 
@@ -368,7 +381,7 @@ public class GenericDAO {
                 statement.close();
             if (close || (isClose && con != null)) {
                 con.close();
-                System.out.println("connection closed");
+                LOG.fine("connection closed");
             }
         }
 
@@ -406,7 +419,7 @@ public class GenericDAO {
         } finally {
             if (close || (isClose && con != null)) {
                 con.close();
-                System.out.println("connection closed");
+                LOG.fine("connection closed");
             }
         }
     }
@@ -427,14 +440,16 @@ public class GenericDAO {
         @SuppressWarnings("unchecked")
         Class<T> clazz = ((Class<T>) this.getClass());
         List<T> resultList = new ArrayList<>();
-        System.out.println(sql);
+        LOG.fine(sql);
         try (Statement statement = con.createStatement()) {
             try (ResultSet resultSet = statement.executeQuery(sql)) {
                 Field[] allfields = FieldReflection.getFieldsNotIgnored(this, clazz);
+                Map<String, Integer> columnIndex = ResultSetMapper.buildColumnIndex(resultSet);
                 while (resultSet.next()) {
                     List<Field> fieldsList = new ArrayList<>(Arrays.asList(allfields));
                     Iterator<Field> FieldIterator = fieldsList.iterator();
-                    T instance = ResultSetMapper.setRowFromResultSet(this, clazz, resultSet, FieldIterator, null);
+                    T instance = ResultSetMapper.setRowFromResultSet(this, clazz, resultSet, columnIndex,
+                            FieldIterator, null);
                     resultList.add(instance);
                 }
 
@@ -442,7 +457,7 @@ public class GenericDAO {
         } finally {
             if (close || (isClose && con != null)) {
                 con.close();
-                System.out.println("connection closed");
+                LOG.fine("connection closed");
             }
         }
         @SuppressWarnings("unchecked")
@@ -494,6 +509,7 @@ public class GenericDAO {
             statement = con.prepareStatement(sql);
             statement = StatementBinder.prepareStatement(this, statement, notNullFields, this);
             resultSet = statement.executeQuery();
+            Map<String, Integer> columnIndex = ResultSetMapper.buildColumnIndex(resultSet);
             while (resultSet.next()) {
                 T instance = clazz.getDeclaredConstructor().newInstance();
                 for (String attribut : attributs) {
@@ -501,7 +517,7 @@ public class GenericDAO {
                     try {
                         field = clazz.getDeclaredField(attribut);
                         instance = ResultSetMapper.setFieldValueFromResultSet(this, field, attribut, resultSet,
-                                instance, true);
+                                columnIndex, instance, true);
                     } catch (Exception e) {
                         if (attribut.contains("_")) { // columnName_tableName ex: id_status, nom_status
                             String[] attributsSplited = attribut.split("_", 2);
@@ -509,11 +525,11 @@ public class GenericDAO {
                             if (attributsSplited[1].equalsIgnoreCase(clazz.getSimpleName())) {
                                 objectField = clazz.getDeclaredField(attributsSplited[0]); // si attribut de la classe
                                 instance = ResultSetMapper.setFieldValueFromResultSet(this, objectField, attribut,
-                                        resultSet, instance, true);
+                                        resultSet, columnIndex, instance, true);
                             } else {
                                 objectField = clazz.getDeclaredField(attributsSplited[1]); // si attribut de l'alltribut
                                 instance = ResultSetMapper.setFieldValueFromResultSet(this, objectField, attribut,
-                                        resultSet, instance, true);
+                                        resultSet, columnIndex, instance, true);
                             }
                         } else {
                             throw e;
@@ -529,7 +545,7 @@ public class GenericDAO {
                 statement.close();
             if (close || (isClose && con != null)) {
                 con.close();
-                System.out.println("connection closed");
+                LOG.fine("connection closed");
             }
         }
         T[] resultArray = (T[]) Array.newInstance(clazz, resultList.size());
@@ -641,12 +657,12 @@ public class GenericDAO {
 
             if (commit) {
                 con.commit();
-                System.out.println("Commited");
+                LOG.fine("Commited");
             }
         } finally {
             if (close || (isClose && con != null)) {
                 con.close();
-                System.out.println("connection closed");
+                LOG.fine("connection closed");
             }
         }
     }
@@ -684,12 +700,12 @@ public class GenericDAO {
             }
             if (commit) {
                 con.commit();
-                System.out.println("Commited");
+                LOG.fine("Commited");
             }
         } finally {
             if (close || (isClose && con != null)) {
                 con.close();
-                System.out.println("connection closed");
+                LOG.fine("connection closed");
             }
         }
     }
@@ -721,7 +737,7 @@ public class GenericDAO {
         if (co == null)
             throw new Exception("Connection ne doit pas être null");
         String request = "SELECT count(*) count FROM (" + sql + ") as sql";
-        System.out.println(request);
+        LOG.fine(request);
         PreparedStatement stat = co.prepareStatement(request);
         try {
             stat = StatementBinder.prepareStatement(this, stat, fields, this);
@@ -745,7 +761,7 @@ public class GenericDAO {
             throw new Exception("Connection ne doit pas être null");
         String tableName = FieldReflection.getTableName(this, clazz);
         String sql = "SELECT count(*) count FROM " + tableName;
-        System.out.println(sql);
+        LOG.fine(sql);
         try (PreparedStatement stat = co.prepareStatement(sql)) {
             try (ResultSet res = stat.executeQuery()) {
                 if (res.next()) {
@@ -759,7 +775,7 @@ public class GenericDAO {
     void prepagePaginationIfAllowed(Connection co, Class<?> clazz, String sql, Field[] fields) throws Exception {
         if (isPaginable()) {
             int totalSize = getResultSize(co, clazz, sql, fields);
-            System.out.println("Result size for sql is " + totalSize + " start : " + this.getPagination().getStart()
+            LOG.fine(() -> "Result size for sql is " + totalSize + " start : " + this.getPagination().getStart()
                     + " end :" + this.getPagination().getEnd());
             this.getPagination().setTotalSize(totalSize);
             this.setLimit(this.getPagination().getBeginIndex(), this.getPagination().getEndIndex());

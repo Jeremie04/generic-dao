@@ -4,6 +4,11 @@ setlocal
 rem === Chemin vers le driver JDBC PostgreSQL (a adapter a votre machine) ===
 set POSTGRES_JAR=D:\classpath\postgresql-42.5.0.jar
 
+rem === Le SQL genere n'est plus affiche par defaut (journalise au niveau FINE).
+rem === Decommentez la ligne suivante pour le voir a nouveau (voir logging.properties) :
+rem set LOG_OPTS=-Djava.util.logging.config.file=logging.properties
+set LOG_OPTS=
+
 echo === Compilation ===
 
 javac -d . Generic\annotation\AClass.java
@@ -71,19 +76,19 @@ echo === Compilation reussie ===
 
 echo.
 echo === Execution des tests de base (test.Test) ===
-java -cp .;%POSTGRES_JAR% test.Test
+java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.Test
 
 echo.
 echo === Execution des tests avances (test.TestAvance) ===
-java -cp .;%POSTGRES_JAR% test.TestAvance
+java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.TestAvance
 
 echo.
 echo === Mesure de performance (test.TestPerformance) ===
-java -cp .;%POSTGRES_JAR% test.TestPerformance
+java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.TestPerformance
 
 echo.
 echo === Mesure de performance avancee (test.TestPerformanceAvance) ===
-java -cp .;%POSTGRES_JAR% test.TestPerformanceAvance
+java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.TestPerformanceAvance
 
 echo.
 pause

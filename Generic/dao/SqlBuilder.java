@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.util.List;
 import java.util.StringJoiner;
+import java.util.logging.Logger;
 
 /**
  * Construction des requetes SQL (INSERT/SELECT/UPDATE/DELETE) et des conditions
@@ -11,6 +12,8 @@ import java.util.StringJoiner;
  * porte par l'entite GenericDAO passee en parametre.
  */
 final class SqlBuilder {
+
+    private static final Logger LOG = Logger.getLogger(SqlBuilder.class.getName());
 
     private SqlBuilder() {
     }
@@ -34,7 +37,7 @@ final class SqlBuilder {
         if (primaryKey == null)
             throw new Exception("Aucune clé primaire trouvé");
         sql = sql + " RETURNING " + FieldReflection.getFieldName(primaryKey);
-        System.out.println(sql);
+        LOG.fine(sql);
         return sql;
     }
 
@@ -189,7 +192,7 @@ final class SqlBuilder {
         }
 
         String sql = sqlBuilder.toString().replace("  ", " ").replace(" WHERE WHERE ", " WHERE ");
-        System.out.println(sql);
+        LOG.fine(sql);
         return sql;
     }
 
@@ -211,14 +214,14 @@ final class SqlBuilder {
         }
         sql = sql + " WHERE " + FieldReflection.getFieldName(primaryKey) + " = ?";
 
-        System.out.println(sql);
+        LOG.fine(sql);
         return sql;
     }
 
     static String prepareDeleteSQL(GenericDAO self, Class<?> clazz, Field primaryKey) {
         String tableName = FieldReflection.getTableName(self, clazz);
         String sql = "DELETE FROM " + tableName + " WHERE " + FieldReflection.getFieldName(primaryKey) + " = ?";
-        System.out.println(sql);
+        LOG.fine(sql);
         return sql;
     }
 }

@@ -1,12 +1,15 @@
 package Generic.dao;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import Generic.annotation.AClass;
 import Generic.annotation.AField;
@@ -71,7 +74,14 @@ final class FieldReflection {
                 "On ne peut pas prendre le primary key du champ " + field.getName() + " n'est pas un objet ");
     }
 
-    static Field[] getFieldsNotIgnored(GenericDAO self, Class<?> clazz) {
+    // La partie couteuse (parcours de la hierarchie de classes + reflexion + lecture des
+    // annotations @AField) ne depend que de la Class, jamais de l'instance : on la met en
+    // cache pour ne la refaire qu'une fois par classe d'entite, pas a chaque appel de
+    // save/select/update/delete. Seul le filtrage par setIgnoredFields(...), propre a
+    // chaque instance, reste recalcule a chaque appel (peu couteux : simple contains()).
+    private static final Map<Class<?>, Field[]> FIELDS_NON_STATIQUES_NON_IGNOREES_CACHE = new ConcurrentHashMap<>();
+
+    private static Field[] decouvrirChampsDeLaClasse(Class<?> clazz) {
         List<Field> fields = new ArrayList<>(Arrays.asList(clazz.getDeclaredFields()));
         Class<?> superClass = clazz.getSuperclass();
 
@@ -87,17 +97,33 @@ final class FieldReflection {
                     // Un champ static (constante, compteur partage, ...) n'est pas une colonne :
                     // sans ce filtre, "public static final int NB = 3;" serait insere comme si
                     // c'etait un attribut de chaque ligne.
-                    if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                    if (Modifier.isStatic(field.getModifiers())) {
                         return false;
                     }
                     AField fieldAnnotation = field.getAnnotation(AField.class);
-                    String fieldName = getFieldName(field);
-                    String className = clazz.getSimpleName();
-                    className = Character.toLowerCase(className.charAt(0)) + className.substring(1);
-                    return (fieldAnnotation == null || !fieldAnnotation.ignored()) &&
-                            !self.getIgnoredFields().contains(fieldName + "_" + className);
+                    return fieldAnnotation == null || !fieldAnnotation.ignored();
                 })
                 .toArray(Field[]::new);
+    }
+
+    static Field[] getFieldsNotIgnored(GenericDAO self, Class<?> clazz) {
+        Field[] champsDeLaClasse = FIELDS_NON_STATIQUES_NON_IGNOREES_CACHE
+                .computeIfAbsent(clazz, FieldReflection::decouvrirChampsDeLaClasse);
+
+        if (self.getIgnoredFields().isEmpty()) {
+            return champsDeLaClasse.clone(); // copie defensive : ne jamais exposer le tableau partage du cache
+        }
+
+        String classNameMinuscule = clazz.getSimpleName();
+        classNameMinuscule = Character.toLowerCase(classNameMinuscule.charAt(0)) + classNameMinuscule.substring(1);
+
+        List<Field> resultat = new ArrayList<>(champsDeLaClasse.length);
+        for (Field field : champsDeLaClasse) {
+            if (!self.getIgnoredFields().contains(getFieldName(field) + "_" + classNameMinuscule)) {
+                resultat.add(field);
+            }
+        }
+        return resultat.toArray(new Field[0]);
     }
 
     static Field[] getFieldsNotNull(GenericDAO self, Object object, Field[] fields) {

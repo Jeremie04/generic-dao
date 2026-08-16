@@ -233,6 +233,16 @@ Puis :
 run.bat
 ```
 
+## Journalisation
+
+Le SQL généré et les événements de cycle de vie (commit, connexion fermée, ...) sont journalisés via `java.util.logging` au niveau `FINE`, **masqué par défaut** — les échecs (rollback, fermeture de connexion) restent visibles par défaut au niveau `WARNING`. Pour retrouver l'affichage du SQL (utile en développement), un fichier [logging.properties](logging.properties) est fourni :
+
+```bash
+java -Djava.util.logging.config.file=logging.properties -cp .;%POSTGRES_JAR% test.Test
+```
+
+Dans `run.bat`, décommentez simplement la ligne `set LOG_OPTS=...` en haut du fichier.
+
 ## Limites connues
 
 - Les identifiants de connexion dans `Connexion.java` sont en dur dans le code (à externaliser avant tout usage partagé/public).
