@@ -26,7 +26,11 @@ Generic/
   annotation/   @AClass, @AField — décrivent la table et les colonnes
   connexion/    Connexion — ouverture de connexion JDBC (identifiants à adapter)
   dao/
-    GenericDAO.java     — la classe à étendre, cœur du framework
+    GenericDAO.java       — la classe à étendre : état de requête + API CRUD publique (orchestration)
+    FieldReflection.java  — résolution table/colonne/clé primaire, découverte des champs, conversion de valeurs
+    SqlBuilder.java        — construction des requêtes SQL (INSERT/SELECT/UPDATE/DELETE, conditions)
+    StatementBinder.java   — liaison des valeurs dans un PreparedStatement
+    ResultSetMapper.java   — reconstruction des objets à partir d'un ResultSet
     legacy/
       GenericDAO2.java  — ancienne version, conservée pour référence, ne pas utiliser
   exceptions/   NotFoundException, DatabaseException

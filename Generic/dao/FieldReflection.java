@@ -1,0 +1,163 @@
+package Generic.dao;
+
+import java.lang.reflect.Field;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import Generic.annotation.AClass;
+import Generic.annotation.AField;
+
+/**
+ * Reflection pure : resolution table/colonne/cle primaire, decouverte des champs
+ * a considerer et conversion de valeurs JDBC vers les types Java. Les methodes qui
+ * dependent de l'etat de requete d'une entite (tableName override, ignoredFields,
+ * initialValue) recoivent cette entite explicitement via le parametre "self".
+ */
+final class FieldReflection {
+
+    private FieldReflection() {
+    }
+
+    static boolean isObject(Class<?> type) {
+        return !(type.isPrimitive() || type.equals(String.class) ||
+                type.equals(Boolean.class) || type.equals(Character.class) ||
+                Number.class.isAssignableFrom(type) || Date.class.isAssignableFrom(type)
+                || Timestamp.class.isAssignableFrom(type));
+    }
+
+    static boolean isObject(Field field) {
+        return isObject(field.getType());
+    }
+
+    static boolean isPrimaryKey(Field field) {
+        AField fieldAnnotation = field.getAnnotation(AField.class);
+        return fieldAnnotation != null && fieldAnnotation.isId();
+    }
+
+    static String getFieldName(Field field) {
+        AField fieldAnnotation = field.getAnnotation(AField.class);
+        if (fieldAnnotation != null && !fieldAnnotation.column().isEmpty()) {
+            return fieldAnnotation.column();
+        } else {
+            return field.getName();
+        }
+    }
+
+    static String getTableName(GenericDAO self, Class<?> clazz) {
+        AClass classAnnotation = clazz.getAnnotation(AClass.class);
+        if (!self.getTableName().equals("")) {
+            return self.getTableName();
+        } else if (classAnnotation != null && !classAnnotation.tableName().isEmpty()) {
+            return classAnnotation.tableName();
+        } else {
+            return clazz.getSimpleName();
+        }
+    }
+
+    static String getFieldNameIfObject(GenericDAO self, Field field, String fieldName, Object objet) throws Exception {
+        if (isObject(field)) {
+            Object fieldObjet = field.get(objet);
+            Field fieldPrimaryKey = getPrimaryKey(self, fieldObjet.getClass());
+            if (fieldPrimaryKey == null) {
+                throw new Exception("Primary key not found");
+            }
+            return fieldPrimaryKey.getName() + "_" + fieldName;
+        }
+        throw new Exception(
+                "On ne peut pas prendre le primary key du champ " + field.getName() + " n'est pas un objet ");
+    }
+
+    static Field[] getFieldsNotIgnored(GenericDAO self, Class<?> clazz) {
+        List<Field> fields = new ArrayList<>(Arrays.asList(clazz.getDeclaredFields()));
+        Class<?> superClass = clazz.getSuperclass();
+
+        while (superClass != null && superClass != GenericDAO.class &&
+                superClass != java.util.Date.class && superClass != java.sql.Timestamp.class &&
+                superClass != java.sql.Time.class) {
+            fields.addAll(Arrays.asList(superClass.getDeclaredFields()));
+            superClass = superClass.getSuperclass();
+        }
+
+        return fields.stream()
+                .filter(field -> {
+                    AField fieldAnnotation = field.getAnnotation(AField.class);
+                    String fieldName = getFieldName(field);
+                    String className = clazz.getSimpleName();
+                    className = Character.toLowerCase(className.charAt(0)) + className.substring(1);
+                    return (fieldAnnotation == null || !fieldAnnotation.ignored()) &&
+                            !self.getIgnoredFields().contains(fieldName + "_" + className);
+                })
+                .toArray(Field[]::new);
+    }
+
+    static Field[] getFieldsNotNull(GenericDAO self, Object object, Field[] fields) {
+        List<Field> notNullFields = new ArrayList<>();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                Object value = field.get(object);
+                if (value != null && isFieldValueSet(self, value)) {
+                    notNullFields.add(field);
+                }
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+        return notNullFields.toArray(new Field[notNullFields.size()]);
+    }
+
+    static boolean isFieldValueSet(GenericDAO self, Object value) {
+        if (value instanceof Integer) {
+            return (Integer) value != self.getInitialValue() && (Integer) value != 0;
+        } else if (value instanceof Double) {
+            return !((Double) value).equals((double) self.getInitialValue()) && (double) value != 0;
+        } else if (value instanceof String) {
+            return !value.toString().isEmpty();
+        }
+        return true;
+    }
+
+    static Field getPrimaryKey(GenericDAO self, Class<?> clazz) throws Exception {
+        Field[] fields = getFieldsNotIgnored(self, clazz);
+        for (Field field : fields) {
+            if (isPrimaryKey(field)) {
+                self.setPrimaryKey(field);
+                return field;
+            }
+        }
+        return null;
+    }
+
+    static Object convertValue(Object value, Class<?> fieldType) throws Exception {
+        if (value == null) {
+            return null;
+        }
+
+        if (fieldType == String.class) {
+            return value.toString();
+        } else if (fieldType == int.class || fieldType == Integer.class) {
+            return Integer.parseInt(value.toString());
+        } else if (fieldType == double.class || fieldType == Double.class) {
+            return Double.parseDouble(value.toString());
+        } else if (fieldType == float.class || fieldType == Float.class) {
+            return Float.parseFloat(value.toString());
+        } else if (fieldType == boolean.class || fieldType == Boolean.class) {
+            return Boolean.parseBoolean(value.toString());
+        } else if (fieldType == Date.class) {
+            if (value instanceof Date) {
+                return (Date) value;
+            } else if (value instanceof Timestamp) {
+                return new Date(((Timestamp) value).getTime());
+            } else {
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                return dateFormat.parse(value.toString());
+            }
+        } else {
+            return value;
+        }
+    }
+}
