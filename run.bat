@@ -14,76 +14,76 @@ set JUNIT_JAR=D:\classpath\junit-platform-console-standalone-1.14.3.jar
 
 echo === Compilation ===
 
-javac -d . Generic\annotation\AClass.java
+javac -d bin Generic\annotation\AClass.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\annotation\AField.java
+javac -d bin Generic\annotation\AField.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\exceptions\NotFoundException.java
+javac -d bin Generic\exceptions\NotFoundException.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\exceptions\DatabaseException.java
+javac -d bin Generic\exceptions\DatabaseException.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\util\Pagination.java
+javac -d bin Generic\util\Pagination.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\util\Parser.java
+javac -d bin Generic\util\Parser.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\util\ParserAttributs.java
+javac -d bin Generic\util\ParserAttributs.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\util\Chart.java
+javac -d bin Generic\util\Chart.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\connexion\Connexion.java
+javac -d bin Generic\connexion\Connexion.java
 if errorlevel 1 goto :error
 
-javac -d . Generic\dao\GenericDAO.java
+javac -d bin Generic\dao\GenericDAO.java
 if errorlevel 1 goto :error
 
-javac -d . test\MyEntity.java
+javac -d bin test\MyEntity.java
 if errorlevel 1 goto :error
 
-javac -d . test\Test.java
+javac -d bin test\Test.java
 if errorlevel 1 goto :error
 
-javac -d . test\Categorie.java
+javac -d bin test\Categorie.java
 if errorlevel 1 goto :error
 
-javac -d . test\Personne.java
+javac -d bin test\Personne.java
 if errorlevel 1 goto :error
 
-javac -d . test\Materiel.java
+javac -d bin test\Materiel.java
 if errorlevel 1 goto :error
 
-javac -d . test\Employe.java
+javac -d bin test\Employe.java
 if errorlevel 1 goto :error
 
-javac -d . test\TestAvance.java
+javac -d bin test\TestAvance.java
 if errorlevel 1 goto :error
 
-javac -d . test\TestPerformance.java
+javac -d bin test\TestPerformance.java
 if errorlevel 1 goto :error
 
-javac -d . test\PerfEntityLarge.java
+javac -d bin test\PerfEntityLarge.java
 if errorlevel 1 goto :error
 
-javac -d . test\TestPerformanceAvance.java
+javac -d bin test\TestPerformanceAvance.java
 if errorlevel 1 goto :error
 
-javac -d . -cp .;%JUNIT_JAR% test\GenericDAOCrudTest.java
+javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAOCrudTest.java
 if errorlevel 1 goto :error
 
-javac -d . -cp .;%JUNIT_JAR% test\GenericDAORelationTest.java
+javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAORelationTest.java
 if errorlevel 1 goto :error
 
-javac -d . -cp .;%JUNIT_JAR% test\GenericDAOInheritanceTest.java
+javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAOInheritanceTest.java
 if errorlevel 1 goto :error
 
-javac -d . -cp .;%JUNIT_JAR% test\GenericDAOFieldHandlingTest.java
+javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAOFieldHandlingTest.java
 if errorlevel 1 goto :error
 
 echo.
@@ -91,25 +91,25 @@ echo === Compilation reussie ===
 
 echo.
 echo === Tests JUnit (assertions automatiques) ===
-java %LOG_OPTS% -jar %JUNIT_JAR% execute --class-path .;%POSTGRES_JAR% --select-package test --details tree
+java %LOG_OPTS% -jar %JUNIT_JAR% execute --class-path bin;%POSTGRES_JAR% --select-package test --details tree
 rem Si cette syntaxe echoue (varie selon la version du jar telechargee), essayez :
 rem java -jar %JUNIT_JAR% --help
 
 echo.
 echo === Execution des tests de base (test.Test) ===
-java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.Test
+java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.Test
 
 echo.
 echo === Execution des tests avances (test.TestAvance) ===
-java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.TestAvance
+java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.TestAvance
 
 echo.
 echo === Mesure de performance (test.TestPerformance) ===
-java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.TestPerformance
+java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.TestPerformance
 
 echo.
 echo === Mesure de performance avancee (test.TestPerformanceAvance) ===
-java %LOG_OPTS% -cp .;%POSTGRES_JAR% test.TestPerformanceAvance
+java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.TestPerformanceAvance
 
 echo.
 pause

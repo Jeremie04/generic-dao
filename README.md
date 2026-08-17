@@ -19,38 +19,7 @@ Mini-framework Java qui généralise les opérations CRUD (Create, Read, Update,
 - Une base PostgreSQL accessible
 - Le driver JDBC PostgreSQL (`postgresql-42.x.x.jar`), à télécharger séparément (non fourni dans ce dépôt)
 
-## Structure du projet
-
-```
-Generic/
-  annotation/   @AClass, @AField — décrivent la table et les colonnes
-  connexion/    Connexion — ouverture de connexion JDBC (identifiants à adapter)
-  dao/
-    GenericDAO.java       — la classe à étendre : état de requête + API CRUD publique (orchestration)
-    FieldReflection.java  — résolution table/colonne/clé primaire, découverte des champs, conversion de valeurs
-    SqlBuilder.java        — construction des requêtes SQL (INSERT/SELECT/UPDATE/DELETE, conditions)
-    StatementBinder.java   — liaison des valeurs dans un PreparedStatement
-    ResultSetMapper.java   — reconstruction des objets à partir d'un ResultSet
-    legacy/
-      GenericDAO2.java  — ancienne version, conservée pour référence, ne pas utiliser
-  exceptions/   NotFoundException, DatabaseException
-  util/
-    Pagination.java       — pagination par page ou par bornes début/fin
-    Parser.java            — parsing de dates/timestamps
-    ParserAttributs.java    — parsing de la syntaxe "materiel(id, categorie(id))"
-    Chart.java              — utilitaires de génération de listes pour graphiques (indépendant du DAO)
-test/
-  MyEntity.java   — entité d'exemple simple (sans relation)
-  Test.java       — teste chaque fonction de base du DAO contre une vraie base
-  Categorie.java, Materiel.java  — exemple de relation "a un" (objet imbriqué)
-  Personne.java, Employe.java    — exemple d'héritage (champs partagés via extends)
-  TestAvance.java — teste les relations et l'héritage
-  TestPerformance.java — mesure le temps d'exécution de save/select sur un volume de données important
-  PerfEntityLarge.java, TestPerformanceAvance.java — mêmes mesures avec une entité à 17 attributs et avec une relation (Materiel/Categorie)
-  GenericDAOCrudTest.java, GenericDAORelationTest.java,
-  GenericDAOInheritanceTest.java, GenericDAOFieldHandlingTest.java — mêmes scénarios que ci-dessus, en tests JUnit 5 avec assertions (voir "Tests JUnit" plus bas)
-run.bat           — compile tout le projet puis lance les tests JUnit et les programmes de démonstration ci-dessus
-```
+> Ce README couvre uniquement l'utilisation du DAO dans votre code. Pour la structure interne du projet, le découpage des classes et comment lancer les tests, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Démarrage rapide
 
@@ -213,44 +182,6 @@ Materiel[] complets = m.select(con, false); // categorie.nom rempli, sans SQL pe
 | `notIncremented` | Réservé pour les clés non auto-incrémentées |
 | `sequence`, `sequenceBefore` | Réservés pour la gestion de séquences |
 
-## Compiler et lancer les tests
-
-`run.bat` compile chaque fichier avec `javac -d .`, puis lance :
-- `test.Test` : crée une table de test et exerce chaque fonction de base (save unitaire et en lot, select, selectOne, findById, update, recherche, pagination, getTableSize, delete) ;
-- `test.TestAvance` : même principe pour la relation objet imbriqué (`Materiel`/`Categorie`) et l'héritage (`Employe extends Personne`) ;
-- `test.TestPerformance` : insère 2000 lignes (constante `NB_LIGNES` modifiable) puis chronomètre `save()` unitaire vs en lot, `select()` sur la table complète, `select()` paginé et `findById()`, avec le temps moyen par ligne ;
-- `test.TestPerformanceAvance` : mêmes mesures que `TestPerformance`, mais sur une entité à 17 attributs (`PerfEntityLarge`, sans relation) puis sur une entité avec relation (`Materiel`/`Categorie`, avec et sans `JOIN`) — pour voir si/de combien le nombre d'attributs et les objets imbriqués alourdissent le coût de la réflexion par rapport à l'entité simple.
-
-Chaque test nettoie ses propres tables à la fin.
-
-Avant de lancer, éditez la ligne suivante dans `run.bat` avec le chemin réel de votre driver PostgreSQL :
-
-```bat
-set POSTGRES_JAR=D:\classpath\postgresql-42.5.0.jar
-```
-
-Puis :
-
-```bash
-run.bat
-```
-
-## Tests JUnit
-
-`test/Test.java`, `TestAvance.java`, `TestPerformance*.java` sont des démonstrations qui affichent leur résultat pour relecture manuelle. `GenericDAOCrudTest`, `GenericDAORelationTest`, `GenericDAOInheritanceTest` et `GenericDAOFieldHandlingTest` couvrent les mêmes scénarios avec de vraies assertions JUnit 5 — y compris des tests de non-régression pour chaque bug corrigé au fil de ce projet (`selectOne()`, la pagination, les champs hérités, les champs `static`, les booléens par défaut, ...).
-
-Ils tournent contre votre base PostgreSQL locale (pas de Testcontainers/Docker), via un unique jar autonome — pas besoin de Maven/Gradle :
-
-1. Téléchargez `junit-platform-console-standalone` (dernière version) depuis [Maven Central](https://mvnrepository.com/artifact/org.junit.platform/junit-platform-console-standalone), et placez le chemin dans `run.bat` :
-   ```bat
-   set JUNIT_JAR=D:\classpath\junit-platform-console-standalone-1.10.2.jar
-   ```
-2. `run.bat` compile les 4 classes de test et lance :
-   ```bat
-   java -jar %JUNIT_JAR% execute --class-path .;%POSTGRES_JAR% --select-package test --details tree
-   ```
-   La syntaxe exacte des options peut varier selon la version du jar téléchargée ; en cas d'échec, `java -jar %JUNIT_JAR% --help` liste les options disponibles pour votre version.
-
 ## Journalisation
 
 Le SQL généré et les événements de cycle de vie (commit, connexion fermée, ...) sont journalisés via `java.util.logging` au niveau `FINE`, **masqué par défaut** — les échecs (rollback, fermeture de connexion) restent visibles par défaut au niveau `WARNING`. Pour retrouver l'affichage du SQL (utile en développement), un fichier [logging.properties](logging.properties) est fourni :
@@ -264,7 +195,6 @@ Dans `run.bat`, décommentez simplement la ligne `set LOG_OPTS=...` en haut du f
 ## Limites connues
 
 - Les identifiants de connexion dans `Connexion.java` sont en dur dans le code (à externaliser avant tout usage partagé/public).
-- `Generic/dao/legacy/GenericDAO2.java` est une ancienne implémentation conservée pour référence uniquement ; elle n'est plus maintenue et ne doit pas être utilisée.
 - Pas de gestion de pool de connexions : chaque appel ouvre/utilise une `Connection` JDBC classique.
 - Un champ `int`/`double` à `0`, ou `boolean` à `false` (les valeurs par défaut de Java), est considéré comme "non renseigné" par `save`/`select`/`update` (voir `init()`) : impossible d'écrire explicitement ces valeurs par défaut, ou de filtrer un `select()` "par l'exemple" dessus. Pour une valeur `0`/`false` volontaire, passez par `setOtherConditions(...)` ou une requête SQL personnalisée.
 - Les champs `static` d'une entité (constantes, etc.) sont ignorés par la réflexion — seuls les champs d'instance sont mappés sur des colonnes.
