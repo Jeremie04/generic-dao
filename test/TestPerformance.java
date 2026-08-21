@@ -39,7 +39,8 @@ public class TestPerformance {
 
             System.out.println("\nMesures terminees.");
         } finally {
-            con.close();
+            con.close(); // rend la connexion au pool
+            Connexion.shutdownPool(); // arret propre : ce programme est le seul a utiliser le pool dans ce process
         }
     }
 

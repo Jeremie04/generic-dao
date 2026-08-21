@@ -7,7 +7,7 @@ Ce document explique comment le code est organisé et comment le compiler/tester
 ```
 Generic/
   annotation/   @AClass, @AField — décrivent la table et les colonnes
-  connexion/    Connexion — ouverture de connexion JDBC (identifiants à adapter)
+  connexion/    Connexion — pool HikariCP partagé (identifiants/réglages à adapter)
   dao/
     GenericDAO.java       — la classe à étendre : état de requête + API CRUD publique (orchestration)
     FieldReflection.java  — résolution table/colonne/clé primaire, découverte des champs, conversion de valeurs
@@ -49,6 +49,14 @@ Toutes leurs méthodes sont `static` et prennent l'entité concernée (`GenericD
 
 `Generic/dao/legacy/GenericDAO2.java` est une ancienne implémentation (monolithique, avec quelques divergences de comportement par rapport à `GenericDAO`), conservée uniquement pour référence historique. Elle n'est plus maintenue et ne doit pas être utilisée ni comme base de départ pour une nouvelle fonctionnalité.
 
+## `Connexion` et le pool HikariCP
+
+Le pool (`HikariDataSource`) est construit une seule fois via l'idiome *initialization-on-demand holder* : une classe imbriquée `PoolHolder` avec un champ `static final` initialisé par un appel de méthode. La JVM garantit que ce bloc ne s'exécute qu'une fois, au premier accès, sans synchronisation explicite au runtime — c'est le lazy-singleton le moins coûteux disponible en Java, et il est thread-safe par construction (contrairement à un double-checked locking manuel).
+
+`getConnect()`/`getConnection(boolean)` restent des méthodes d'instance/statique avec la même signature qu'avant (voir README) ; en interne, elles empruntent simplement une connexion à `PoolHolder.DATA_SOURCE` au lieu d'appeler `DriverManager.getConnection(...)`. Le reste de `GenericDAO` (qui fait `new Connexion().getConnect()` quand `con == null`) n'a nécessité aucune modification.
+
+Point d'attention si vous touchez à ce code : si la toute première tentative de connexion échoue (base injoignable, identifiants invalides), la construction de `PoolHolder.DATA_SOURCE` lève une exception dans un initialiseur statique — la JVM la enveloppe en `ExceptionInInitializerError`, et **toute classe `PoolHolder` ayant échoué à s'initialiser reste définitivement inutilisable pour le reste du process** (elle lève `NoClassDefFoundError` à chaque tentative suivante, même si la base redevient joignable). Pour les programmes `test.*` de ce dépôt (des process one-shot), ce n'est pas un problème pratique ; pour un serveur long terme qui doit survivre à une base momentanément indisponible au démarrage, il faudrait remplacer le holder par un singleton avec nouvelle tentative explicite.
+
 ## Compiler et lancer les tests
 
 `run.bat` compile chaque fichier avec `javac -d bin` (les `.class` vont dans `bin/`, jamais à côté des sources), puis lance :
@@ -60,10 +68,12 @@ Toutes leurs méthodes sont `static` et prennent l'entité concernée (`GenericD
 
 Chaque test nettoie ses propres tables à la fin.
 
-Avant de lancer, éditez la ligne suivante dans `run.bat` avec le chemin réel de votre driver PostgreSQL :
+Avant de lancer, éditez dans `run.bat` les chemins vers votre driver PostgreSQL et vers HikariCP/SLF4J (voir la section "Pool de connexions" du README) :
 
 ```bat
 set POSTGRES_JAR=D:\classpath\postgresql-42.5.0.jar
+set HIKARI_JAR=D:\classpath\HikariCP-5.1.0.jar
+set SLF4J_JAR=D:\classpath\slf4j-api-2.0.13.jar
 ```
 
 Puis :
@@ -84,8 +94,9 @@ Ils tournent contre votre base PostgreSQL locale (pas de Testcontainers/Docker),
    ```
 2. `run.bat` compile les 4 classes de test et lance :
    ```bat
-   java -jar %JUNIT_JAR% execute --class-path .;%POSTGRES_JAR% --select-package test --details tree
+   java -jar %JUNIT_JAR% execute --class-path %CP% --select-package test --details tree
    ```
+   (`%CP%` regroupe `bin` et toutes les dépendances externes — voir le début de `run.bat`.)
    La syntaxe exacte des options peut varier selon la version du jar téléchargée ; en cas d'échec, `java -jar %JUNIT_JAR% --help` liste les options disponibles pour votre version.
 
 ## Journalisation (détails d'implémentation)

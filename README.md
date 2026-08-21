@@ -12,12 +12,14 @@ Mini-framework Java qui généralise les opérations CRUD (Create, Read, Update,
 - Pagination (`Pagination` + `setPaginable`) avec calcul automatique du nombre total de résultats
 - Sélection restreinte à certains attributs, y compris sur des objets imbriqués (`setFieldsToSetSimplified("materiel(id, categorie(id, nom))")`)
 - Tri (`setOrdre`), conditions additionnelles libres (`setOtherConditions`), exclusion de champs (`setIgnoredFields`)
+- Connexions fournies par un pool HikariCP partagé (voir [Pool de connexions](#pool-de-connexions)), transparent pour le code appelant
 
 ## Prérequis
 
 - JDK 17+
 - Une base PostgreSQL accessible
 - Le driver JDBC PostgreSQL (`postgresql-42.x.x.jar`), à télécharger séparément (non fourni dans ce dépôt)
+- `HikariCP-x.x.x.jar` et `slf4j-api-x.x.x.jar` (pool de connexions, voir [Pool de connexions](#pool-de-connexions)), également à télécharger séparément
 
 > Ce README couvre uniquement l'utilisation du DAO dans votre code. Pour la structure interne du projet, le découpage des classes et comment lancer les tests, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -54,6 +56,8 @@ Les identifiants de connexion se trouvent dans [Generic/connexion/Connexion.java
 ```java
 Connection con = Connexion.getConnection(false); // false = autocommit désactivé
 ```
+
+Cette connexion vient d'un pool HikariCP partagé (voir [Pool de connexions](#pool-de-connexions)) — vous n'avez rien de plus à faire, `con.close()` la rend simplement au pool au lieu de la fermer physiquement.
 
 ### 3. CRUD
 
@@ -182,12 +186,39 @@ Materiel[] complets = m.select(con, false); // categorie.nom rempli, sans SQL pe
 | `notIncremented` | Réservé pour les clés non auto-incrémentées |
 | `sequence`, `sequenceBefore` | Réservés pour la gestion de séquences |
 
+## Pool de connexions
+
+`Connexion` s'appuie sur un pool [HikariCP](https://github.com/brettwooldridge/HikariCP) partagé pour toute la JVM, créé une seule fois à la toute première connexion demandée (au lieu d'ouvrir une connexion physique neuve à chaque appel). Rien ne change dans votre code :
+
+```java
+Connection con = Connexion.getConnection(false); // emprunte une connexion au pool
+// ... votre code ...
+con.close(); // rend la connexion au pool (ne ferme pas la connexion physique)
+```
+
+**Réglages** (`Generic/connexion/Connexion.java`), lus une seule fois à la création du pool :
+
+```java
+Connexion.MAXIMUM_POOL_SIZE = 10;      // nombre de connexions physiques maintenues ouvertes
+Connexion.CONNECTION_TIMEOUT_MS = 30_000; // attente max pour obtenir une connexion libre
+```
+
+Les modifier une fois le pool déjà démarré (donc après votre tout premier appel à `getConnection`/`getConnect`) n'a plus d'effet — c'est inhérent à un pool : on ne peut pas reconfigurer à la volée des connexions physiques déjà établies.
+
+**Arrêt propre.** Pour une application longue durée (serveur, ...), fermez le pool explicitement à l'arrêt :
+
+```java
+Connexion.shutdownPool();
+```
+
+Inutile pour un script one-shot (comme les programmes `test.*` de ce dépôt) : le pool meurt avec le process JVM. Ils l'appellent quand même par propreté.
+
 ## Journalisation
 
 Le SQL généré et les événements de cycle de vie (commit, connexion fermée, ...) sont journalisés via `java.util.logging` au niveau `FINE`, **masqué par défaut** — les échecs (rollback, fermeture de connexion) restent visibles par défaut au niveau `WARNING`. Pour retrouver l'affichage du SQL (utile en développement), un fichier [logging.properties](logging.properties) est fourni :
 
 ```bash
-java -Djava.util.logging.config.file=logging.properties -cp .;%POSTGRES_JAR% test.Test
+java -Djava.util.logging.config.file=logging.properties -cp %CP% test.Test
 ```
 
 Dans `run.bat`, décommentez simplement la ligne `set LOG_OPTS=...` en haut du fichier.
@@ -195,6 +226,5 @@ Dans `run.bat`, décommentez simplement la ligne `set LOG_OPTS=...` en haut du f
 ## Limites connues
 
 - Les identifiants de connexion dans `Connexion.java` sont en dur dans le code (à externaliser avant tout usage partagé/public).
-- Pas de gestion de pool de connexions : chaque appel ouvre/utilise une `Connection` JDBC classique.
 - Un champ `int`/`double` à `0`, ou `boolean` à `false` (les valeurs par défaut de Java), est considéré comme "non renseigné" par `save`/`select`/`update` (voir `init()`) : impossible d'écrire explicitement ces valeurs par défaut, ou de filtrer un `select()` "par l'exemple" dessus. Pour une valeur `0`/`false` volontaire, passez par `setOtherConditions(...)` ou une requête SQL personnalisée.
 - Les champs `static` d'une entité (constantes, etc.) sont ignorés par la réflexion — seuls les champs d'instance sont mappés sur des colonnes.

@@ -4,6 +4,10 @@ setlocal
 rem === Chemin vers le driver JDBC PostgreSQL (a adapter a votre machine) ===
 set POSTGRES_JAR=D:\classpath\postgresql-42.5.0.jar
 
+rem === Pool de connexions HikariCP (voir README, section "Pool de connexions") ===
+set HIKARI_JAR=D:\classpath\HikariCP-5.1.0.jar
+set SLF4J_JAR=D:\classpath\slf4j-api-2.0.13.jar
+
 rem === Le SQL genere n'est plus affiche par defaut (journalise au niveau FINE).
 rem === Decommentez la ligne suivante pour le voir a nouveau (voir logging.properties) :
 rem set LOG_OPTS=-Djava.util.logging.config.file=logging.properties
@@ -12,78 +16,84 @@ set LOG_OPTS=
 rem === Chemin vers le jar JUnit 5 autonome (console-standalone), a adapter - voir README ===
 set JUNIT_JAR=D:\classpath\junit-platform-console-standalone-1.14.3.jar
 
+rem === Classpath commun : sources deja compilees (bin) + toutes les dependances externes.
+rem === Utilise pour TOUTES les compilations/executions, meme les fichiers qui n'en ont pas
+rem === directement besoin (Connexion.java etant recompile implicitement des qu'un autre
+rem === fichier le reference, il doit voir Hikari/SLF4J a chaque etape en aval de la sienne).
+set CP=bin;%POSTGRES_JAR%;%HIKARI_JAR%;%SLF4J_JAR%
+
 echo === Compilation ===
 
-javac -d bin Generic\annotation\AClass.java
+javac -d bin -cp %CP% Generic\annotation\AClass.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\annotation\AField.java
+javac -d bin -cp %CP% Generic\annotation\AField.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\exceptions\NotFoundException.java
+javac -d bin -cp %CP% Generic\exceptions\NotFoundException.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\exceptions\DatabaseException.java
+javac -d bin -cp %CP% Generic\exceptions\DatabaseException.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\util\Pagination.java
+javac -d bin -cp %CP% Generic\util\Pagination.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\util\Parser.java
+javac -d bin -cp %CP% Generic\util\Parser.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\util\ParserAttributs.java
+javac -d bin -cp %CP% Generic\util\ParserAttributs.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\util\Chart.java
+javac -d bin -cp %CP% Generic\util\Chart.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\connexion\Connexion.java
+javac -d bin -cp %CP% Generic\connexion\Connexion.java
 if errorlevel 1 goto :error
 
-javac -d bin Generic\dao\GenericDAO.java
+javac -d bin -cp %CP% Generic\dao\GenericDAO.java
 if errorlevel 1 goto :error
 
-javac -d bin test\MyEntity.java
+javac -d bin -cp %CP% test\MyEntity.java
 if errorlevel 1 goto :error
 
-javac -d bin test\Test.java
+javac -d bin -cp %CP% test\Test.java
 if errorlevel 1 goto :error
 
-javac -d bin test\Categorie.java
+javac -d bin -cp %CP% test\Categorie.java
 if errorlevel 1 goto :error
 
-javac -d bin test\Personne.java
+javac -d bin -cp %CP% test\Personne.java
 if errorlevel 1 goto :error
 
-javac -d bin test\Materiel.java
+javac -d bin -cp %CP% test\Materiel.java
 if errorlevel 1 goto :error
 
-javac -d bin test\Employe.java
+javac -d bin -cp %CP% test\Employe.java
 if errorlevel 1 goto :error
 
-javac -d bin test\TestAvance.java
+javac -d bin -cp %CP% test\TestAvance.java
 if errorlevel 1 goto :error
 
-javac -d bin test\TestPerformance.java
+javac -d bin -cp %CP% test\TestPerformance.java
 if errorlevel 1 goto :error
 
-javac -d bin test\PerfEntityLarge.java
+javac -d bin -cp %CP% test\PerfEntityLarge.java
 if errorlevel 1 goto :error
 
-javac -d bin test\TestPerformanceAvance.java
+javac -d bin -cp %CP% test\TestPerformanceAvance.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAOCrudTest.java
+javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAOCrudTest.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAORelationTest.java
+javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAORelationTest.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAOInheritanceTest.java
+javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAOInheritanceTest.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp bin;%JUNIT_JAR% test\GenericDAOFieldHandlingTest.java
+javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAOFieldHandlingTest.java
 if errorlevel 1 goto :error
 
 echo.
@@ -91,25 +101,25 @@ echo === Compilation reussie ===
 
 echo.
 echo === Tests JUnit (assertions automatiques) ===
-java %LOG_OPTS% -jar %JUNIT_JAR% execute --class-path bin;%POSTGRES_JAR% --select-package test --details tree
+java %LOG_OPTS% -jar %JUNIT_JAR% execute --class-path %CP% --select-package test --details tree
 rem Si cette syntaxe echoue (varie selon la version du jar telechargee), essayez :
 rem java -jar %JUNIT_JAR% --help
 
 echo.
 echo === Execution des tests de base (test.Test) ===
-java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.Test
+java %LOG_OPTS% -cp %CP% test.Test
 
 echo.
 echo === Execution des tests avances (test.TestAvance) ===
-java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.TestAvance
+java %LOG_OPTS% -cp %CP% test.TestAvance
 
 echo.
 echo === Mesure de performance (test.TestPerformance) ===
-java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.TestPerformance
+java %LOG_OPTS% -cp %CP% test.TestPerformance
 
 echo.
 echo === Mesure de performance avancee (test.TestPerformanceAvance) ===
-java %LOG_OPTS% -cp bin;%POSTGRES_JAR% test.TestPerformanceAvance
+java %LOG_OPTS% -cp %CP% test.TestPerformanceAvance
 
 echo.
 pause

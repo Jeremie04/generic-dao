@@ -20,7 +20,8 @@ public class TestAvance {
             testHeritage(con);
             System.out.println("\nTous les tests avances se sont executes sans exception.");
         } finally {
-            con.close();
+            con.close(); // rend la connexion au pool
+            Connexion.shutdownPool(); // arret propre : ce programme est le seul a utiliser le pool dans ce process
         }
     }
 
