@@ -142,7 +142,27 @@ m.setCategorie(ref);
 m.save(con, false, true);
 ```
 
-**Lecture.** `select()`/`findById()` générés automatiquement ne font pas de `JOIN` : ils ne remplissent que la clé primaire de l'objet lié (`categorie.id`, via la colonne `id_categorie` déjà présente dans la table), pas ses autres attributs (`categorie.nom` reste `null`). Pour charger l'objet lié en entier, il faut fournir une requête qui fait le `JOIN` soi-même et qui aliase chaque colonne voulue en `<colonne>_<nom du champ objet>` (ici `categorie` étant le nom du champ dans `Materiel`, on obtient `nom_categorie`) :
+**Lecture.** Par défaut, `select()`/`findById()` ne font pas de `JOIN` : ils ne remplissent que la clé primaire de l'objet lié (`categorie.id`, via la colonne `id_categorie` déjà présente dans la table), pas ses autres attributs (`categorie.nom` reste `null`) — pour ne jamais imposer le coût d'un `JOIN` à un appel qui n'en a pas besoin.
+
+**Pour charger l'objet lié en entier, activez `setFetchRelations` sur le(s) champ(s) concerné(s)** ; le `JOIN` et l'aliasing de colonnes sont générés automatiquement par réflexion :
+
+```java
+Materiel filtre = new Materiel();
+filtre.setFetchRelations("categorie"); // active le JOIN pour ce champ, pour ce select() uniquement
+Materiel[] complets = filtre.select(con, false); // categorie.nom est rempli
+```
+
+Ne gère qu'un seul niveau de relation (l'objet lié ne doit pas lui-même avoir de champ objet à charger — il est silencieusement ignoré, sans erreur), et fait un `JOIN` simple — une ligne dont la relation est absente disparaît du résultat, comme avec n'importe quel `JOIN` SQL classique.
+
+Chaque relation utilise un alias de table dédié (dérivé du nom du champ) plutôt que le nom de table brut : deux relations vers le même type sur une même entité, ou une relation auto-référente (ex. `Employe.manager` de type `Employe`), fonctionnent donc sans conflit de nom de table. Les colonnes de l'entité elle-même sont aussi toujours qualifiées par sa table, pour rester valides même si la table liée expose une colonne du même nom.
+
+Le nom de table de l'objet lié utilisé dans le `JOIN` est celui de son `@AClass` (ou son nom de classe par défaut) — **pas** un éventuel `setTableName(...)` posé sur une autre instance de ce type. Si l'objet lié doit pointer vers une table différente de son défaut (table de test isolée, schéma multi-tenant, ...), précisez-le explicitement :
+
+```java
+filtre.setRelationTableName("categorie", "categorie_test_isole");
+```
+
+**Cas plus avancés** (plusieurs niveaux d'imbrication, `LEFT JOIN`, conditions personnalisées dans le `JOIN`) : écrivez la requête vous-même et passez-la à `select(Connection, boolean, String)`, avec le même schéma d'alias `<colonne>_<nom du champ objet>` :
 
 ```java
 String sql = "SELECT materiel_test.*, categorie_test.nom AS nom_categorie " +
@@ -150,7 +170,7 @@ String sql = "SELECT materiel_test.*, categorie_test.nom AS nom_categorie " +
 Materiel[] complets = new Materiel().select(con, false, sql); // categorie.nom est rempli
 ```
 
-**Alternative : une vue SQL.** Plutôt que d'écrire cette requête à chaque appel, on peut créer une vue PostgreSQL qui fait le `JOIN` une bonne fois pour toutes avec le même schéma d'alias, puis pointer l'entité dessus avec `setTableName` (qui prend le pas sur `@AClass(tableName = ...)`) :
+Ou bien créez une vue PostgreSQL qui fait ce `JOIN` une bonne fois pour toutes, puis pointez l'entité dessus avec `setTableName` (qui prend le pas sur `@AClass(tableName = ...)`) :
 
 ```sql
 CREATE VIEW materiel_avec_categorie AS
@@ -168,7 +188,7 @@ Materiel[] complets = m.select(con, false); // categorie.nom rempli, sans SQL pe
 
 ⚠️ Une vue basée sur un `JOIN` n'est en général pas modifiable directement dans PostgreSQL (il faudrait des `INSTEAD OF` triggers). Réservez cette technique à la lecture (`select`/`findById`), et gardez une instance pointant sur la vraie table (`materiel_test`) pour `save`/`update`/`delete`.
 
-⚠️ La règle d'alias est `<colonne>_<nom du champ objet dans la classe parente>`, pas littéralement le nom de la classe liée — les deux coïncident ici uniquement parce que le champ s'appelle `categorie`, comme la classe `Categorie`. Un champ nommé différemment (`private Categorie cat;`) attendrait des alias en `nom_cat`, pas `nom_categorie`.
+⚠️ Dans les trois approches ci-dessus, la règle d'alias est `<colonne>_<nom du champ objet dans la classe parente>`, pas littéralement le nom de la classe liée — les deux coïncident ici uniquement parce que le champ s'appelle `categorie`, comme la classe `Categorie`. Un champ nommé différemment (`private Categorie cat;`) attendrait des alias en `nom_cat`, pas `nom_categorie`.
 
 ## Annotations
 

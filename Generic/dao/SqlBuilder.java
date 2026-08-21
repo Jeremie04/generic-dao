@@ -41,7 +41,7 @@ final class SqlBuilder {
         return sql;
     }
 
-    static String prepareAcondition(GenericDAO self, Field field) throws Exception {
+    static String prepareAcondition(GenericDAO self, String tableName, Field field) throws Exception {
         // Un champ herite d'une classe parente designe toujours une colonne de la meme table :
         // pas de suffixe de nom de classe ici (contrairement a prepareResearchCondition, qui
         // gere le cas distinct d'un objet lie dans une autre table).
@@ -54,10 +54,13 @@ final class SqlBuilder {
                 && (field.getType().equals(String.class) || field.getType().equals(Character.class))) {
             equal = " LIKE ?";
         }
-        return fieldName + equal;
+        // Qualifie toujours par la table : sans ça, une condition sur un champ de l'entite
+        // (ex. "nom = ?") devient ambigue des qu'un JOIN automatique (setFetchRelations) est
+        // actif et que la table liee a une colonne du meme nom.
+        return tableName + "." + fieldName + equal;
     }
 
-    static String prepareResearchCondition(GenericDAO self, Field[] fields) throws Exception {
+    static String prepareResearchCondition(GenericDAO self, String tableName, Field[] fields) throws Exception {
         StringBuilder conditionBuilder = new StringBuilder(" OR ");
 
         if (self.getRecherche() != null) {
@@ -69,6 +72,11 @@ final class SqlBuilder {
                             && !fieldName.toLowerCase()
                                     .endsWith("_" + field.getDeclaringClass().getSimpleName().toLowerCase())) {
                         fieldName = fieldName + "_" + field.getDeclaringClass().getSimpleName();
+                    } else {
+                        // Champ propre a l'entite (ou herite, deja gere ci-dessus) : qualifie par
+                        // la table pour rester valide si un JOIN automatique (setFetchRelations)
+                        // expose une colonne du meme nom sur la table liee.
+                        fieldName = tableName + "." + fieldName;
                     }
 
                     StringJoiner valueJoiner = new StringJoiner(" OR ");
@@ -88,7 +96,8 @@ final class SqlBuilder {
 
                     conditionBuilder.append(valueJoiner.toString()).append(" OR ");
                 } else if (FieldReflection.isObject(field)) {
-                    conditionBuilder.append(prepareResearchCondition(self, field.getType().getDeclaredFields()));
+                    conditionBuilder
+                            .append(prepareResearchCondition(self, tableName, field.getType().getDeclaredFields()));
                 }
             }
         }
@@ -134,9 +143,9 @@ final class SqlBuilder {
         return condition;
     }
 
-    private static String getResearchCondition(GenericDAO self, Field[] fields) throws Exception {
+    private static String getResearchCondition(GenericDAO self, String tableName, Field[] fields) throws Exception {
         if (self.getFieldToResearch().isEmpty()) {
-            String researchCondition = prepareResearchCondition(self, fields);
+            String researchCondition = prepareResearchCondition(self, tableName, fields);
             return researchCondition.replace("  ", " ").replace("OR OR", "OR");
         } else {
             return prepareResearchConditionFromFieldNames(self, self.getFieldToResearch());
@@ -146,10 +155,33 @@ final class SqlBuilder {
     static String prepareSelectSQL(GenericDAO self, Connection con, String columns, String tableName, Field[] fields,
             Field[] allFields) throws Exception {
         StringBuilder sqlBuilder = new StringBuilder();
-        String columnString = (columns == null) ? "*" : columns;
-        sqlBuilder.append("SELECT ").append(columnString).append(" FROM ").append(tableName);
 
-        String researchCondition = getResearchCondition(self, allFields);
+        // JOIN automatique (setFetchRelations) : opt-in par relation, pour ne jamais imposer
+        // le cout d'un JOIN a un select() qui n'en a pas demande.
+        StringJoiner joinClauses = new StringJoiner(" ");
+        StringJoiner extraColumns = new StringJoiner(", ");
+        if (!self.getFetchRelations().isEmpty()) {
+            for (Field field : allFields) {
+                if (FieldReflection.isObject(field) && self.getFetchRelations().contains(field.getName())) {
+                    appendRelationJoin(self, tableName, field, joinClauses, extraColumns);
+                }
+            }
+        }
+
+        String columnString;
+        if (columns != null) {
+            columnString = columns; // selection d'attributs explicite : le JOIN automatique ne s'y applique pas
+        } else if (extraColumns.length() > 0) {
+            columnString = tableName + ".*, " + extraColumns;
+        } else {
+            columnString = "*";
+        }
+        sqlBuilder.append("SELECT ").append(columnString).append(" FROM ").append(tableName);
+        if (joinClauses.length() > 0) {
+            sqlBuilder.append(" ").append(joinClauses);
+        }
+
+        String researchCondition = getResearchCondition(self, tableName, allFields);
         // researchCondition commence par " OR " pour s'enchainer apres les conditions exactes
         // (fields) ou apres otherConditions. Sans rien avant elle, ce " OR " en tete produirait
         // un "WHERE OR ..." invalide : on le retire dans ce cas precis.
@@ -176,7 +208,7 @@ final class SqlBuilder {
             if (i > 0) {
                 sqlBuilder.append(" AND ");
             }
-            String condition = prepareAcondition(self, fields[i]);
+            String condition = prepareAcondition(self, tableName, fields[i]);
             sqlBuilder.append(condition);
         }
 
@@ -194,6 +226,48 @@ final class SqlBuilder {
         String sql = sqlBuilder.toString().replace("  ", " ").replace(" WHERE WHERE ", " WHERE ");
         LOG.fine(sql);
         return sql;
+    }
+
+    /**
+     * Construit le JOIN et les colonnes aliasees pour une relation demandee via
+     * setFetchRelations(...) : equivalent au JOIN qu'on ecrirait a la main (voir README,
+     * section "Relations"), derive par reflexion. Ne gere qu'un seul niveau de relation ; les
+     * champs objet du type lie ne sont pas suivis recursivement.
+     */
+    private static void appendRelationJoin(GenericDAO self, String tableName, Field relationField,
+            StringJoiner joinClauses, StringJoiner extraColumns) throws Exception {
+        Class<?> relatedClass = relationField.getType();
+        String tableOverride = self.getRelationTableNames().get(relationField.getName());
+        String relatedTable = (tableOverride != null) ? tableOverride : FieldReflection.getSimpleTableName(relatedClass);
+        Field relatedPrimaryKey = FieldReflection.getPrimaryKey(self, relatedClass);
+        if (relatedPrimaryKey == null) {
+            throw new Exception("setFetchRelations(\"" + relationField.getName()
+                    + "\") : aucune cle primaire (@AField(isId = true)) trouvee sur "
+                    + relatedClass.getSimpleName());
+        }
+        String fkColumn = relatedPrimaryKey.getName() + "_" + FieldReflection.getFieldName(relationField);
+        // Base sur la colonne resolue (respecte @AField(column = ...) sur le champ-relation
+        // lui-meme), pas sur le nom du champ Java brut : doit rester coherent avec le suffixe
+        // utilise a la lecture par ResultSetMapper.setRowFromResultSet.
+        String aliasSuffix = GenericDAO.toSnakeCase(FieldReflection.getFieldName(relationField));
+        // Alias de table propre a cette relation (jamais le nom de table brut) : evite un
+        // "table specified more than once" si deux relations pointent vers le meme type, ou
+        // si la relation est auto-referente (ex. Employe.manager de type Employe).
+        String tableAlias = aliasSuffix;
+
+        joinClauses.add("JOIN " + relatedTable + " AS " + tableAlias + " ON " + tableName + "." + fkColumn + " = "
+                + tableAlias + "." + FieldReflection.getFieldName(relatedPrimaryKey));
+
+        for (Field relatedField : FieldReflection.getFieldsNotIgnored(self, relatedClass)) {
+            if (FieldReflection.isPrimaryKey(relatedField) || FieldReflection.isObject(relatedField)) {
+                // La cle primaire est deja couverte par la colonne FK (deja presente dans la
+                // table de base) ; une relation imbriquee du type lie n'est pas suivie (un seul
+                // niveau de JOIN automatique).
+                continue;
+            }
+            String col = FieldReflection.getFieldName(relatedField);
+            extraColumns.add(tableAlias + "." + col + " AS " + col + "_" + aliasSuffix);
+        }
     }
 
     static String prepareUpdateSQL(GenericDAO self, Class<?> clazz, Field[] fields, Field primaryKey)

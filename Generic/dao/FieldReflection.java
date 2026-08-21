@@ -51,14 +51,21 @@ final class FieldReflection {
     }
 
     static String getTableName(GenericDAO self, Class<?> clazz) {
-        AClass classAnnotation = clazz.getAnnotation(AClass.class);
         if (!self.getTableName().equals("")) {
             return self.getTableName();
-        } else if (classAnnotation != null && !classAnnotation.tableName().isEmpty()) {
-            return classAnnotation.tableName();
-        } else {
-            return clazz.getSimpleName();
         }
+        return getSimpleTableName(clazz);
+    }
+
+    // Resolution du nom de table a partir de la seule Class, sans consulter le tableName
+    // override d'une entite "self" : utilise pour resoudre le nom de table d'un objet lie
+    // (relation), qui ne doit jamais heriter du setTableName() de l'entite qui le contient.
+    static String getSimpleTableName(Class<?> clazz) {
+        AClass classAnnotation = clazz.getAnnotation(AClass.class);
+        if (classAnnotation != null && !classAnnotation.tableName().isEmpty()) {
+            return classAnnotation.tableName();
+        }
+        return clazz.getSimpleName();
     }
 
     static String getFieldNameIfObject(GenericDAO self, Field field, String fieldName, Object objet) throws Exception {

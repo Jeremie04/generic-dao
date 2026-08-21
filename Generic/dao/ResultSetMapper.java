@@ -76,8 +76,12 @@ final class ResultSetMapper {
                 List<Field> fieldsList = new ArrayList<>(List.of(fieldsChild));
                 Iterator<Field> fieldIteratorChild = fieldsList.iterator();
 
+                // Base sur la colonne resolue (respecte @AField(column = ...) sur ce champ),
+                // pas sur le nom du champ Java brut : doit rester coherent avec le suffixe
+                // d'alias genere par SqlBuilder.appendRelationJoin (setFetchRelations) et par
+                // le JOIN manuel documente dans le README.
                 T instanceValue = (T) setRowFromResultSet(self, fieldClazz, resultSet, columnIndex,
-                        fieldIteratorChild, GenericDAO.toSnakeCase(field.getName()));
+                        fieldIteratorChild, GenericDAO.toSnakeCase(FieldReflection.getFieldName(field)));
                 field.set(instance, instanceValue);
             } else {
                 String columnName = FieldReflection.getFieldName(field);

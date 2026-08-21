@@ -91,4 +91,22 @@ public class GenericDAORelationTest {
         assertEquals("Informatique", resultats[0].getCategorie().getNom(),
                 "avec JOIN, le nom de l'objet lie doit etre rempli via l'alias nom_categorie");
     }
+
+    @Test
+    @Order(4)
+    void setFetchRelationsGenereLeJoinAutomatiquement() throws Exception {
+        // Meme resultat que selectAvecJointureChargeLObjetLieEnEntier(), sans ecrire le SQL a
+        // la main : le JOIN et l'alias nom_categorie sont derives par reflexion.
+        Materiel filtre = new Materiel();
+        filtre.setTableName(TABLE_MATERIEL);
+        filtre.setFetchRelations("categorie");
+        // Categorie utilise ici une table de test (categorie_junit_test) differente de son
+        // @AClass par defaut (categorie_test) : il faut le preciser pour le JOIN automatique.
+        filtre.setRelationTableName("categorie", TABLE_CATEGORIE);
+        Materiel[] resultats = filtre.select(con, false);
+        assertEquals(1, resultats.length);
+        assertEquals(idCategorie, resultats[0].getCategorie().getId());
+        assertEquals("Informatique", resultats[0].getCategorie().getNom(),
+                "setFetchRelations(\"categorie\") doit charger l'objet lie en entier");
+    }
 }

@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,6 +46,10 @@ public class GenericDAO {
     private List<String> ignoredFields = new ArrayList<>();
     // only fields to consider
     private List<String> fieldsToSet = new ArrayList<>();
+    // relations (champs objet) a charger en entier via un JOIN automatique
+    private List<String> fetchRelations = new ArrayList<>();
+    // nom de table a utiliser pour une relation donnee, si different de son @AClass par defaut
+    private Map<String, String> relationTableNames = new HashMap<>();
     // primary key
     private Field primaryKey = null;
     // filtre
@@ -309,7 +314,7 @@ public class GenericDAO {
      * directement, {@link #setRecherche(String, String...)} suffit.
      */
     public String prepareResearchCondition(Field[] fields) throws Exception {
-        return SqlBuilder.prepareResearchCondition(this, fields);
+        return SqlBuilder.prepareResearchCondition(this, FieldReflection.getTableName(this, this.getClass()), fields);
     }
 
     /**
@@ -970,6 +975,47 @@ public class GenericDAO {
 
     List<String> getFieldToSet() {
         return this.fieldsToSet;
+    }
+
+    List<String> getFetchRelations() {
+        return this.fetchRelations;
+    }
+
+    /**
+     * Active, pour le prochain {@code select()} (et donc {@code findById()}/{@code selectOne()}
+     * qui l'utilisent en interne), un {@code JOIN} automatique sur les champs objet nommes, pour
+     * charger l'objet lie en entier au lieu de sa seule cle primaire — voir la section
+     * "Relations" du README. Sans appel a cette methode, le comportement par defaut est
+     * inchange : aucun {@code JOIN}, seule la cle etrangere est remplie.
+     * <p>
+     * Ne gere qu'un seul niveau de relation (le champ objet lie ne doit pas lui-meme avoir de
+     * champ objet a charger) ; pour un cas plus complexe, utilisez une requete SQL personnalisee
+     * ({@link #select(Connection, boolean, String)}) ou une vue.
+     *
+     * @param fieldNames noms des champs objet de l'entite a charger en entier (ex. "categorie")
+     */
+    public void setFetchRelations(String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            fetchRelations.add(fieldName);
+        }
+    }
+
+    Map<String, String> getRelationTableNames() {
+        return this.relationTableNames;
+    }
+
+    /**
+     * Precise le nom de table a utiliser pour une relation donnee dans le {@code JOIN}
+     * automatique de {@link #setFetchRelations(String...)}, si la table de l'objet lie
+     * n'est pas celle declaree par son {@code @AClass} (ex. une table de test isolee, un
+     * schema multi-tenant, ...). Sans appel a cette methode, le nom de table de
+     * {@code @AClass} (ou le nom de la classe) est utilise, comme pour toute autre entite.
+     *
+     * @param fieldName nom du champ objet concerne (ex. "categorie")
+     * @param tableName nom de table a utiliser pour cette relation
+     */
+    public void setRelationTableName(String fieldName, String tableName) {
+        relationTableNames.put(fieldName, tableName);
     }
 
     private Field getPrimaryKey() {

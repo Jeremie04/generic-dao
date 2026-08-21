@@ -5,8 +5,8 @@ rem === Chemin vers le driver JDBC PostgreSQL (a adapter a votre machine) ===
 set POSTGRES_JAR=D:\classpath\postgresql-42.5.0.jar
 
 rem === Pool de connexions HikariCP (voir README, section "Pool de connexions") ===
-set HIKARI_JAR=D:\classpath\HikariCP-5.1.0.jar
-set SLF4J_JAR=D:\classpath\slf4j-api-2.0.13.jar
+set HIKARI_JAR=D:\classpath\HikariCP-7.0.2.jar
+set SLF4J_JAR=D:\classpath\slf4j-api-2.0.9.jar
 
 rem === Le SQL genere n'est plus affiche par defaut (journalise au niveau FINE).
 rem === Decommentez la ligne suivante pour le voir a nouveau (voir logging.properties) :
@@ -24,76 +24,94 @@ set CP=bin;%POSTGRES_JAR%;%HIKARI_JAR%;%SLF4J_JAR%
 
 echo === Compilation ===
 
-javac -d bin -cp %CP% Generic\annotation\AClass.java
+javac -d bin -cp %CP% -sourcepath . Generic\annotation\AClass.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\annotation\AField.java
+javac -d bin -cp %CP% -sourcepath . Generic\annotation\AField.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\exceptions\NotFoundException.java
+javac -d bin -cp %CP% -sourcepath . Generic\exceptions\NotFoundException.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\exceptions\DatabaseException.java
+javac -d bin -cp %CP% -sourcepath . Generic\exceptions\DatabaseException.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\util\Pagination.java
+javac -d bin -cp %CP% -sourcepath . Generic\util\Pagination.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\util\Parser.java
+javac -d bin -cp %CP% -sourcepath . Generic\util\Parser.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\util\ParserAttributs.java
+javac -d bin -cp %CP% -sourcepath . Generic\util\ParserAttributs.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\util\Chart.java
+javac -d bin -cp %CP% -sourcepath . Generic\util\Chart.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\connexion\Connexion.java
+javac -d bin -cp %CP% -sourcepath . Generic\connexion\Connexion.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% Generic\dao\GenericDAO.java
+javac -d bin -cp %CP% -sourcepath . Generic\dao\FieldReflection.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\MyEntity.java
+javac -d bin -cp %CP% -sourcepath . Generic\dao\StatementBinder.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\Test.java
+javac -d bin -cp %CP% -sourcepath . Generic\dao\SqlBuilder.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\Categorie.java
+javac -d bin -cp %CP% -sourcepath . Generic\dao\ResultSetMapper.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\Personne.java
+javac -d bin -cp %CP% -sourcepath . Generic\dao\GenericDAO.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\Materiel.java
+javac -d bin -cp %CP% -sourcepath . test\MyEntity.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\Employe.java
+javac -d bin -cp %CP% -sourcepath . test\Test.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\TestAvance.java
+javac -d bin -cp %CP% -sourcepath . test\Categorie.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\TestPerformance.java
+javac -d bin -cp %CP% -sourcepath . test\Personne.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\PerfEntityLarge.java
+javac -d bin -cp %CP% -sourcepath . test\Materiel.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP% test\TestPerformanceAvance.java
+javac -d bin -cp %CP% -sourcepath . test\Employe.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAOCrudTest.java
+javac -d bin -cp %CP% -sourcepath . test\TestAvance.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAORelationTest.java
+javac -d bin -cp %CP% -sourcepath . test\TestPerformance.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAOInheritanceTest.java
+javac -d bin -cp %CP% -sourcepath . test\PerfEntityLarge.java
 if errorlevel 1 goto :error
 
-javac -d bin -cp %CP%;%JUNIT_JAR% test\GenericDAOFieldHandlingTest.java
+javac -d bin -cp %CP% -sourcepath . test\TestPerformanceAvance.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP% -sourcepath . test\Noeud.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOCrudTest.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAORelationTest.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAORelationEdgeCasesTest.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOInheritanceTest.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOFieldHandlingTest.java
 if errorlevel 1 goto :error
 
 echo.

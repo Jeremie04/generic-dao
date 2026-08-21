@@ -1,0 +1,9 @@
+{
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar",
+        "d:\\classpath\\HikariCP-7.0.2.jar",
+        "d:\\classpath\\junit-4.13.2.jar",
+        "d:\\classpath\\junit-platform-console-standalone-1.14.3.jar",
+        "d:\\classpath\\slf4j-api-2.0.9.jar"
+    ]
+}
