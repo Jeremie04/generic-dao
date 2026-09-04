@@ -54,9 +54,22 @@ final class ResultSetMapper {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     static <T> T setRowFromResultSet(GenericDAO self, Class<T> clazz, ResultSet resultSet,
             Map<String, Integer> columnIndex, Iterator<Field> fieldIterator, String motherFieldName)
+            throws Exception {
+        return setRowFromResultSet(self, clazz, resultSet, columnIndex, fieldIterator, motherFieldName, 0);
+    }
+
+    // Un seul niveau de relation est suivi automatiquement (voir setFetchRelations, README) :
+    // au-dela de depth 1, aucune colonne aliasee correspondante n'existe de toute facon dans le
+    // ResultSet, et une relation auto-referente (Noeud.parent, Employe.manager, ...) recurserait
+    // sinon indefiniment (StackOverflowError) puisque fieldClazz reste le meme type a chaque
+    // niveau. Le champ concerne est alors simplement laisse a sa valeur par defaut (null).
+    private static final int MAX_RELATION_DEPTH = 1;
+
+    @SuppressWarnings("unchecked")
+    private static <T> T setRowFromResultSet(GenericDAO self, Class<T> clazz, ResultSet resultSet,
+            Map<String, Integer> columnIndex, Iterator<Field> fieldIterator, String motherFieldName, int depth)
             throws Exception {
         T instance = clazz.getDeclaredConstructor().newInstance();
 
@@ -71,6 +84,9 @@ final class ResultSetMapper {
             field.setAccessible(true);
 
             if (FieldReflection.isObject(field)) {
+                if (depth >= MAX_RELATION_DEPTH) {
+                    continue;
+                }
                 Class<?> fieldClazz = field.getType();
                 Field[] fieldsChild = FieldReflection.getFieldsNotIgnored(self, fieldClazz);
                 List<Field> fieldsList = new ArrayList<>(List.of(fieldsChild));
@@ -81,7 +97,7 @@ final class ResultSetMapper {
                 // d'alias genere par SqlBuilder.appendRelationJoin (setFetchRelations) et par
                 // le JOIN manuel documente dans le README.
                 T instanceValue = (T) setRowFromResultSet(self, fieldClazz, resultSet, columnIndex,
-                        fieldIteratorChild, GenericDAO.toSnakeCase(FieldReflection.getFieldName(field)));
+                        fieldIteratorChild, GenericDAO.toSnakeCase(FieldReflection.getFieldName(field)), depth + 1);
                 field.set(instance, instanceValue);
             } else {
                 String columnName = FieldReflection.getFieldName(field);
