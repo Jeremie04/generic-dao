@@ -117,6 +117,9 @@ if errorlevel 1 goto :error
 javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOCollectionRelationTest.java
 if errorlevel 1 goto :error
 
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOBatchAndSearchTest.java
+if errorlevel 1 goto :error
+
 javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOInheritanceTest.java
 if errorlevel 1 goto :error
 

@@ -57,6 +57,10 @@ public class GenericDAO {
     private boolean filterStringend = false; // filtrer les valeurs des string du fin
     private String recherche = null; // le nom à rechercher
     private List<String> fieldsToResearch = new ArrayList<>(); // noms comme dans la base
+    // valeurs reelles a lier aux "?" emis par SqlBuilder pour setRecherche(...) (ILIKE ?),
+    // peuplee par SqlBuilder.prepareResearchCondition/prepareResearchConditionFromFieldNames au
+    // moment de la construction du SQL, puis lue et liee par select(...) juste apres.
+    private List<Object> rechercheBoundValues = new ArrayList<>();
     private String otherConditions = "";
     // pagination
     private boolean paginable = false;
@@ -352,6 +356,17 @@ public class GenericDAO {
      */
     @SuppressWarnings("unchecked")
     public <T> T[] select(Connection con, boolean isClose, String sql) throws Exception {
+        return select(con, isClose, sql, java.util.Collections.emptyList());
+    }
+
+    // Variante utilisee en interne par select(Connection, boolean) et
+    // select(Connection, String[], boolean), qui ont deja construit le sql via prepareSelectSQL :
+    // extraBindValues recoit alors les valeurs de setRecherche(...) (voir SqlBuilder, ILIKE ?),
+    // liees juste apres les conditions exactes (notNullFields). Vide pour le select(Connection,
+    // boolean, String) public : le sql y est fourni tel quel par l'appelant, sans "?"
+    // supplementaire a lier.
+    @SuppressWarnings("unchecked")
+    <T> T[] select(Connection con, boolean isClose, String sql, List<Object> extraBindValues) throws Exception {
         boolean close = false;
         if (con == null) {
             con = getConnection();
@@ -367,6 +382,7 @@ public class GenericDAO {
             LOG.fine(sql);
             statement = con.prepareStatement(sql);
             statement = StatementBinder.prepareStatement(this, statement, notNullFields, this);
+            statement = StatementBinder.bindValues(this, statement, extraBindValues, notNullFields.length + 1);
             resultSet = statement.executeQuery();
             Map<String, Integer> columnIndex = ResultSetMapper.buildColumnIndex(resultSet);
             while (resultSet.next()) {
@@ -425,7 +441,7 @@ public class GenericDAO {
             String tableName = FieldReflection.getTableName(this, clazz);
             String sql = SqlBuilder.prepareSelectSQL(this, con, null, tableName, notNullFields, allfields);
 
-            return select(con, isClose, sql);
+            return select(con, isClose, sql, new ArrayList<>(getRechercheBoundValues()));
         } finally {
             if (close || (isClose && con != null)) {
                 con.close();
@@ -521,6 +537,8 @@ public class GenericDAO {
                     allfields);
             statement = con.prepareStatement(sql);
             statement = StatementBinder.prepareStatement(this, statement, notNullFields, this);
+            statement = StatementBinder.bindValues(this, statement, new ArrayList<>(getRechercheBoundValues()),
+                    notNullFields.length + 1);
             resultSet = statement.executeQuery();
             Map<String, Integer> columnIndex = ResultSetMapper.buildColumnIndex(resultSet);
             while (resultSet.next()) {
@@ -680,6 +698,70 @@ public class GenericDAO {
         }
     }
 
+    /**
+     * Met a jour (UPDATE) plusieurs entites du meme type en une seule requete preparee (mise a
+     * jour en lot), chacune avec sa propre valeur de cle primaire (lue par reflexion sur chaque
+     * element, contrairement a {@link #update(Connection, Object, boolean, boolean)} qui prend
+     * un {@code idValue} unique separe). Les colonnes mises a jour sont determinees a partir du
+     * premier element du tableau : comme pour {@link #save(Connection, Object[], boolean, boolean)},
+     * tous les objets doivent donc avoir les memes champs renseignes (les champs non renseignes
+     * sur le premier element ne seront pas ecrits, meme s'ils le sont sur les suivants).
+     * <p>
+     * Attention : la table (et toute config {@code set...}) utilisee est celle de l'entite sur
+     * laquelle {@code update} est appele, pas celle des objets du tableau — appelez cette methode
+     * sur une instance configuree (voir la meme remarque sur {@code save} en lot).
+     *
+     * @param con     connexion a utiliser, ou {@code null} pour en ouvrir une nouvelle
+     * @param objects les entites a mettre a jour (non vide), chacune avec sa cle primaire deja renseignee
+     * @param isClose {@code true} pour fermer la connexion apres l'appel
+     * @param commit  {@code true} pour valider la transaction (rollback automatique sinon en cas d'erreur)
+     */
+    public <T> void update(Connection con, T[] objects, boolean isClose, boolean commit) throws Exception {
+        boolean close = false;
+        if (con == null) {
+            con = getConnection();
+            close = true;
+        }
+        try {
+            Class<?> clazz = objects[0].getClass();
+            Field primaryKey = FieldReflection.getPrimaryKey(this, clazz);
+            if (primaryKey == null)
+                throw new Exception("Primary Key is undefined");
+            primaryKey.setAccessible(true);
+            Field[] allFields = FieldReflection.getFieldsNotIgnored(this, clazz);
+            Field[] fields = FieldReflection.getFieldsNotNull(this, objects[0], allFields);
+            String sql = SqlBuilder.prepareUpdateSQL(this, clazz, fields, primaryKey);
+
+            try (PreparedStatement statement = con.prepareStatement(sql)) {
+                for (T object : objects) {
+                    Object idValue = primaryKey.get(object);
+                    StatementBinder.prepareUpdateStatement(this, statement, fields, idValue, primaryKey, object);
+                    statement.executeUpdate();
+                    statement.clearParameters();
+                }
+                if (commit) {
+                    con.commit();
+                    LOG.fine("Commited");
+                }
+            } catch (SQLException e) {
+                if (commit) {
+                    try {
+                        con.rollback();
+                        LOG.fine("Rollback executed");
+                    } catch (SQLException rollbackEx) {
+                        LOG.warning(() -> "Rollback failed: " + rollbackEx.getMessage());
+                    }
+                }
+                throw new Exception("SQL execution failed: " + e.getMessage(), e);
+            }
+        } finally {
+            if (close || (isClose && con != null)) {
+                con.close();
+                LOG.fine("connection closed");
+            }
+        }
+    }
+
     /*
      * DELETE
      */
@@ -723,6 +805,60 @@ public class GenericDAO {
         }
     }
 
+    /**
+     * Supprime (DELETE) plusieurs entites du meme type en une seule requete preparee (suppression
+     * en lot), chacune identifiee par sa propre valeur de cle primaire (lue par reflexion sur
+     * chaque element).
+     *
+     * @param con     connexion a utiliser, ou {@code null} pour en ouvrir une nouvelle
+     * @param objects les entites a supprimer (non vide), chacune avec sa cle primaire deja renseignee
+     * @param isClose {@code true} pour fermer la connexion apres l'appel
+     * @param commit  {@code true} pour valider la transaction (rollback automatique sinon en cas d'erreur)
+     */
+    public <T> void delete(Connection con, T[] objects, boolean isClose, boolean commit) throws Exception {
+        boolean close = false;
+        if (con == null) {
+            con = getConnection();
+            close = true;
+        }
+        try {
+            Class<?> clazz = objects[0].getClass();
+            Field primaryKey = FieldReflection.getPrimaryKey(this, clazz);
+            if (primaryKey == null)
+                throw new Exception("Primary Key is undefined");
+            primaryKey.setAccessible(true);
+            String sql = SqlBuilder.prepareDeleteSQL(this, clazz, primaryKey);
+
+            try (PreparedStatement statement = con.prepareStatement(sql)) {
+                for (T object : objects) {
+                    Object idValue = primaryKey.get(object);
+                    StatementBinder.setValueToField(this, statement, idValue, 1);
+                    statement.executeUpdate();
+                    statement.clearParameters();
+                }
+                if (commit) {
+                    con.commit();
+                    LOG.fine("Commited");
+                }
+            } catch (SQLException e) {
+                if (commit) {
+                    try {
+                        con.rollback();
+                        LOG.fine("Rollback executed");
+                    } catch (SQLException rollbackEx) {
+                        LOG.warning(() -> "Rollback failed: " + rollbackEx.getMessage());
+                    }
+                }
+                throw new Exception("SQL execution failed: " + e.getMessage(), e);
+            }
+        } finally {
+            if (close || (isClose && con != null)) {
+                con.close();
+                LOG.fine("connection closed");
+            }
+        }
+    }
+
     /*
      * Connection
      */
@@ -747,6 +883,15 @@ public class GenericDAO {
      * {@link #setPaginable(boolean)} + {@link #setPagination(Pagination)}.
      */
     public int getResultSize(Connection co, Class<?> clazz, String sql, Field[] fields) throws Exception {
+        return getResultSize(co, clazz, sql, fields, java.util.Collections.emptyList());
+    }
+
+    // Variante utilisee par prepagePaginationIfAllowed : sql inclut alors deja les "?" de
+    // setRecherche(...) (voir SqlBuilder), qu'il faut lier ici aussi, apres ceux de "fields" —
+    // sinon la requete de comptage echoue ("no value specified for parameter") des que
+    // setRecherche(...) est actif en meme temps que la pagination.
+    int getResultSize(Connection co, Class<?> clazz, String sql, Field[] fields, List<Object> extraBindValues)
+            throws Exception {
         if (co == null)
             throw new Exception("Connection ne doit pas être null");
         String request = "SELECT count(*) count FROM (" + sql + ") as sql";
@@ -754,6 +899,7 @@ public class GenericDAO {
         PreparedStatement stat = co.prepareStatement(request);
         try {
             stat = StatementBinder.prepareStatement(this, stat, fields, this);
+            stat = StatementBinder.bindValues(this, stat, extraBindValues, fields.length + 1);
             try (ResultSet res = stat.executeQuery()) {
                 if (res.next()) {
                     return res.getInt("count");
@@ -787,7 +933,10 @@ public class GenericDAO {
 
     void prepagePaginationIfAllowed(Connection co, Class<?> clazz, String sql, Field[] fields) throws Exception {
         if (isPaginable()) {
-            int totalSize = getResultSize(co, clazz, sql, fields);
+            // sql (construit par SqlBuilder.prepareSelectSQL, deja appele a ce stade) inclut les
+            // "?" de setRecherche(...) : rechercheBoundValues est deja peuplee, dans le meme
+            // ordre, par prepareResearchCondition/prepareResearchConditionFromFieldNames.
+            int totalSize = getResultSize(co, clazz, sql, fields, new ArrayList<>(getRechercheBoundValues()));
             LOG.fine(() -> "Result size for sql is " + totalSize + " start : " + this.getPagination().getStart()
                     + " end :" + this.getPagination().getEnd());
             this.getPagination().setTotalSize(totalSize);
@@ -979,6 +1128,10 @@ public class GenericDAO {
 
     List<String> getFieldToResearch() {
         return this.fieldsToResearch;
+    }
+
+    List<Object> getRechercheBoundValues() {
+        return this.rechercheBoundValues;
     }
 
     List<String> getFieldToSet() {

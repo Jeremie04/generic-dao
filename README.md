@@ -5,7 +5,7 @@ Mini-framework Java qui généralise les opérations CRUD (Create, Read, Update,
 ## Fonctionnalités
 
 - CRUD générique : `save`, `select` (tous / un seul / par id), `update`, `delete`
-- Insertion unitaire ou en lot (`save(Connection, T[], ...)`)
+- Insertion, mise à jour et suppression unitaires ou en lot (`save`/`update`/`delete(Connection, T[], ...)`)
 - Mapping automatique table ⇄ classe et colonne ⇄ champ via annotations, avec valeurs par défaut sensées si non précisées
 - Détection et résolution des relations : un champ de type objet est mappé sur la clé primaire de l'objet lié (`categorie` → colonne `id_categorie`) — voir [Relations (objets imbriqués)](#relations-objets-imbriqués)
 - Recherche texte multi-colonnes (`setRecherche`) avec filtres `LIKE`/`ILIKE` début/fin
@@ -98,6 +98,20 @@ new MyEntity().save(con, new MyEntity[] { e2, e3 }, false, true);
 
 À la différence de `save()` sur un seul objet, cette variante ne renvoie pas les id générés (elle retourne `void`).
 
+`update(Connection, T[], ...)` et `delete(Connection, T[], ...)` fonctionnent en lot de la même façon, avec une différence : chaque élément du tableau porte **sa propre** clé primaire (lue par réflexion), pas un `idValue` unique séparé comme sur la version un-seul-objet :
+
+```java
+MyEntity a = new MyEntity().findById(con, idA, false);
+a.setDescription("Modifiée");
+MyEntity b = new MyEntity().findById(con, idB, false);
+b.setDescription("Modifiée aussi");
+new MyEntity().update(con, new MyEntity[] { a, b }, false, true);
+
+new MyEntity().delete(con, new MyEntity[] { a, b }, false, true); // a.getId()/b.getId() suffisent ici
+```
+
+Même remarque que pour `save()` en lot : les colonnes mises à jour par `update(...)` en lot sont déterminées à partir du **premier** élément du tableau, tous doivent donc avoir les mêmes champs renseignés.
+
 ### Recherche texte
 
 ```java
@@ -105,6 +119,8 @@ MyEntity search = new MyEntity();
 search.setRecherche("Deuxieme");      // OR ILIKE sur toutes les colonnes String de l'entité
 MyEntity[] results = search.select(con, false);
 ```
+
+Le texte cherché est toujours lié en tant que paramètre de requête préparée (`ILIKE ?`), jamais concaténé directement dans le SQL : `setRecherche(...)` peut donc recevoir en toute sécurité de l'input utilisateur (contrairement à `setOtherConditions(...)`, qui reste un fragment SQL libre — voir son avertissement).
 
 ### Pagination
 

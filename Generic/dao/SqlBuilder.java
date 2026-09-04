@@ -60,7 +60,20 @@ final class SqlBuilder {
         return tableName + "." + fieldName + equal;
     }
 
+    // setRecherche(...) est la fonction la plus exposee a de l'input utilisateur direct (une
+    // barre de recherche, typiquement) : ses valeurs ne doivent jamais etre concatenees dans le
+    // texte SQL (injection possible, et une simple apostrophe dans le terme cherche cassait deja
+    // la requete sans intention malveillante). Les deux methodes ci-dessous emettent donc des
+    // "ILIKE ?" et accumulent les valeurs reelles (sans le formatage %...%, applique a la liaison
+    // par StatementBinder comme pour n'importe quel autre champ) dans self.getRechercheBoundValues(),
+    // dans le meme ordre que les "?" apparaissent dans le SQL genere. Vide puis repeuple cette
+    // liste a chaque appel : elle est relue par GenericDAO juste apres avoir construit le SQL.
     static String prepareResearchCondition(GenericDAO self, String tableName, Field[] fields) throws Exception {
+        self.getRechercheBoundValues().clear();
+        return buildResearchCondition(self, tableName, fields);
+    }
+
+    private static String buildResearchCondition(GenericDAO self, String tableName, Field[] fields) throws Exception {
         StringBuilder conditionBuilder = new StringBuilder(" OR ");
 
         if (self.getRecherche() != null) {
@@ -81,23 +94,14 @@ final class SqlBuilder {
 
                     StringJoiner valueJoiner = new StringJoiner(" OR ");
                     for (String value : values) {
-                        StringBuilder valueBuilder = new StringBuilder();
-                        valueBuilder.append(fieldName).append(" ILIKE '");
-                        if (self.isFilterStringend()) {
-                            valueBuilder.append("%");
-                        }
-                        valueBuilder.append(value);
-                        if (self.isFilterStringstart()) {
-                            valueBuilder.append("%");
-                        }
-                        valueBuilder.append("'");
-                        valueJoiner.add(valueBuilder.toString());
+                        valueJoiner.add(fieldName + " ILIKE ?");
+                        self.getRechercheBoundValues().add(value);
                     }
 
                     conditionBuilder.append(valueJoiner.toString()).append(" OR ");
                 } else if (FieldReflection.isObject(field)) {
                     conditionBuilder
-                            .append(prepareResearchCondition(self, tableName, field.getType().getDeclaredFields()));
+                            .append(buildResearchCondition(self, tableName, field.getType().getDeclaredFields()));
                 }
             }
         }
@@ -111,6 +115,7 @@ final class SqlBuilder {
     }
 
     static String prepareResearchConditionFromFieldNames(GenericDAO self, List<String> fields) {
+        self.getRechercheBoundValues().clear();
         StringBuilder conditionBuilder = new StringBuilder(" OR ");
 
         if (self.getRecherche() != null) {
@@ -119,17 +124,8 @@ final class SqlBuilder {
             for (String fieldName : fields) {
                 StringJoiner valueJoiner = new StringJoiner(" OR ");
                 for (String value : values) {
-                    StringBuilder valueBuilder = new StringBuilder();
-                    valueBuilder.append(fieldName).append(" ILIKE '");
-                    if (self.isFilterStringend()) {
-                        valueBuilder.append("%");
-                    }
-                    valueBuilder.append(value);
-                    if (self.isFilterStringstart()) {
-                        valueBuilder.append("%");
-                    }
-                    valueBuilder.append("'");
-                    valueJoiner.add(valueBuilder.toString());
+                    valueJoiner.add(fieldName + " ILIKE ?");
+                    self.getRechercheBoundValues().add(value);
                 }
                 conditionBuilder.append(valueJoiner.toString()).append(" OR ");
             }
