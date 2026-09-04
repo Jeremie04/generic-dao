@@ -99,6 +99,12 @@ if errorlevel 1 goto :error
 javac -d bin -cp %CP% -sourcepath . test\Noeud.java
 if errorlevel 1 goto :error
 
+javac -d bin -cp %CP% -sourcepath . test\Auteur.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP% -sourcepath . test\Livre.java
+if errorlevel 1 goto :error
+
 javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOCrudTest.java
 if errorlevel 1 goto :error
 
@@ -106,6 +112,9 @@ javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAORelationTest.java
 if errorlevel 1 goto :error
 
 javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAORelationEdgeCasesTest.java
+if errorlevel 1 goto :error
+
+javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOCollectionRelationTest.java
 if errorlevel 1 goto :error
 
 javac -d bin -cp %CP%;%JUNIT_JAR% -sourcepath . test\GenericDAOInheritanceTest.java

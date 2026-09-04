@@ -23,6 +23,17 @@ public @interface AField {
     /** Nom de la colonne SQL. Vide par defaut (le nom du champ Java est alors utilise). */
     String column() default ""; // Column's Name
 
+    /**
+     * A poser sur un champ collection ({@code List<Item>} ou {@code Item[]}) representant une
+     * relation "un-a-plusieurs" chargeable via {@code setFetchRelations(...)}. Nomme le champ
+     * de la classe {@code Item} qui reference cette entite en retour (la cle etrangere est
+     * portee par la table liee, jamais par celle de ce champ collection). Obligatoire pour tout
+     * champ collection utilise avec {@code setFetchRelations}, sinon une exception est levee a
+     * l'execution : impossible de deviner ce champ par reflexion seule (ambiguite en cas de
+     * plusieurs champs du meme type, ou de relation auto-referente).
+     */
+    String mappedBy() default "";
+
     // Declares mais non lus par GenericDAO : reserves pour une future gestion des sequences
     // SQL, sans effet actuellement.
     String sequence() default ""; // Sequence's Name

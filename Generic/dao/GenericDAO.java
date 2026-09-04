@@ -377,6 +377,11 @@ public class GenericDAO {
                 resultList.add(instance);
             }
 
+            // Relations "un-a-plusieurs" (List<Item>/Item[], voir @AField.mappedBy) : chargees a
+            // part (requete(s) batch), jamais via le JOIN de prepareSelectSQL (voir
+            // CollectionRelationLoader). con est encore ouverte a ce stade (fermeture en finally).
+            CollectionRelationLoader.loadCollectionRelations(this, con, clazz, resultList);
+
             T[] resultArray = (T[]) Array.newInstance(clazz, resultList.size());
             return resultList.toArray(resultArray);
         } finally {
@@ -459,6 +464,9 @@ public class GenericDAO {
                 }
 
             }
+            // con est encore ouverte ici (Statement try-with-resources pas encore ferme) : voir
+            // la note equivalente dans select(Connection, boolean, String).
+            CollectionRelationLoader.loadCollectionRelations(this, con, clazz, resultList);
         } finally {
             if (close || (isClose && con != null)) {
                 con.close();
@@ -991,8 +999,14 @@ public class GenericDAO {
      * Ne gere qu'un seul niveau de relation (le champ objet lie ne doit pas lui-meme avoir de
      * champ objet a charger) ; pour un cas plus complexe, utilisez une requete SQL personnalisee
      * ({@link #select(Connection, boolean, String)}) ou une vue.
+     * <p>
+     * Fonctionne aussi pour un champ collection ({@code List<Item>} ou {@code Item[]}, relation
+     * "un-a-plusieurs") annote {@code @AField(mappedBy = "...")} : charge alors via une requete
+     * batch separee ({@code WHERE fk IN (...)}) plutot qu'un JOIN, pour ne jamais dupliquer les
+     * lignes du parent.
      *
-     * @param fieldNames noms des champs objet de l'entite a charger en entier (ex. "categorie")
+     * @param fieldNames noms des champs objet (ou collection) de l'entite a charger en entier
+     *                   (ex. "categorie", ou "livres" pour une relation "un-a-plusieurs")
      */
     public void setFetchRelations(String... fieldNames) {
         for (String fieldName : fieldNames) {

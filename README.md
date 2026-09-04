@@ -190,6 +190,43 @@ Materiel[] complets = m.select(con, false); // categorie.nom rempli, sans SQL pe
 
 ⚠️ Dans les trois approches ci-dessus, la règle d'alias est `<colonne>_<nom du champ objet dans la classe parente>`, pas littéralement le nom de la classe liée — les deux coïncident ici uniquement parce que le champ s'appelle `categorie`, comme la classe `Categorie`. Un champ nommé différemment (`private Categorie cat;`) attendrait des alias en `nom_cat`, pas `nom_categorie`.
 
+### Relations "un-à-plusieurs" (`List<Item>` / `Item[]`)
+
+Un champ collection (`List<Item>` ou `Item[]`) représente une relation "un-à-plusieurs" : la clé étrangère est portée par la table de `Item`, pas par celle du champ collection. Il faut donc préciser, via `@AField(mappedBy = "...")`, le nom du champ côté `Item` qui référence l'entité en retour — la réflexion seule ne peut pas le deviner sans ambiguïté (plusieurs champs du même type, relation auto-référente, ...) :
+
+```java
+@AClass(tableName = "auteur_test")
+public class Auteur extends GenericDAO {
+    @AField(isId = true) private int id;
+    @AField private String nom;
+
+    @AField(mappedBy = "auteur") // "auteur" = nom du champ Livre.auteur, pas de la classe Auteur
+    private List<Livre> livres;
+    // ...
+}
+
+@AClass(tableName = "livre_test")
+public class Livre extends GenericDAO {
+    @AField(isId = true) private int id;
+    @AField private String titre;
+    @AField private Auteur auteur; // relation "un" classique, colonne "id_auteur"
+    // ...
+}
+```
+
+Un champ collection n'est jamais une colonne de sa propre table (ni en lecture, ni en écriture) : il n'est jamais concerné par `save`/`update`, et est ignoré par `select()` tant que `setFetchRelations` n'est pas activé dessus.
+
+**Chargement**, comme pour une relation "un" — même méthode, `setFetchRelations` :
+
+```java
+Auteur filtre = new Auteur();
+filtre.setId(auteurId);
+filtre.setFetchRelations("livres");
+Auteur[] resultats = filtre.select(con, false); // resultats[0].getLivres() rempli
+```
+
+⚠️ Contrairement à une relation "un" (un seul `JOIN`), une relation "un-à-plusieurs" **n'utilise jamais de `JOIN`** : un `JOIN` classique dupliquerait chaque parent une fois par enfant. Le chargement se fait via une requête séparée par relation demandée (`SELECT * FROM livre_test WHERE id_auteur IN (...)`, pour tous les parents déjà chargés en une fois, pas un par un), puis un regroupement en mémoire — voir l'estimation de performance dans [ARCHITECTURE.md](ARCHITECTURE.md). `setRelationTableName(...)` fonctionne aussi pour ces champs, comme pour une relation "un".
+
 ## Annotations
 
 **`@AClass`**
@@ -203,6 +240,7 @@ Materiel[] complets = m.select(con, false); // categorie.nom rempli, sans SQL pe
 | `isId` | Marque la clé primaire (une seule par entité) |
 | `column` | Nom de la colonne (défaut : nom du champ Java) |
 | `ignored` | Exclut le champ de toutes les opérations CRUD |
+| `mappedBy` | Sur un champ `List<Item>`/`Item[]` : nom du champ côté `Item` portant la clé étrangère (voir [Relations "un-à-plusieurs"](#relations-un-à-plusieurs-listitem--item)) |
 | `notIncremented` | Réservé pour les clés non auto-incrémentées |
 | `sequence`, `sequenceBefore` | Réservés pour la gestion de séquences |
 
